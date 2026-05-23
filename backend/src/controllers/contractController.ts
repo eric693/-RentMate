@@ -1,0 +1,161 @@
+import { Response, Request } from 'express';
+import { AuthRequest } from '../middleware/auth';
+import { prisma } from '../app';
+import { generateMonthlyRentRecords } from '../services/rentService';
+import { sendTenantMessage } from '../services/lineService';
+import crypto from 'crypto';
+
+export async function getContracts(req: AuthRequest, res: Response) {
+  const userId = req.userId!;
+  const { status } = req.query;
+
+  const properties = await prisma.property.findMany({ where: { userId } });
+  const propertyIds = properties.map((p) => p.id);
+  const units = await prisma.unit.findMany({ where: { propertyId: { in: propertyIds } } });
+  const unitIds = units.map((u) => u.id);
+
+  const contracts = await prisma.contract.findMany({
+    where: {
+      unitId: { in: unitIds },
+      ...(status ? { status: status as any } : {}),
+    },
+    include: {
+      unit: { include: { property: true } },
+      tenant: true,
+      rentRecords: { orderBy: { dueDate: 'desc' }, take: 1 },
+    },
+    orderBy: { endDate: 'asc' },
+  });
+  res.json(contracts);
+}
+
+export async function createContract(req: AuthRequest, res: Response) {
+  const { unitId, tenantId, startDate, endDate, monthlyRent, depositAmount, depositPaid, rentDueDay, notes } = req.body;
+  if (!unitId || !tenantId || !startDate || !endDate || !monthlyRent) {
+    res.status(400).json({ error: '請填寫所有必填欄位' });
+    return;
+  }
+
+  const unit = await prisma.unit.findFirst({ where: { id: unitId }, include: { property: true } });
+  if (!unit || unit.property.userId !== req.userId!) {
+    res.status(404).json({ error: '找不到房間' }); return;
+  }
+
+  const contract = await prisma.contract.create({
+    data: {
+      unitId,
+      tenantId,
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+      monthlyRent,
+      depositAmount: depositAmount ?? monthlyRent * 2,
+      depositPaid: depositPaid ?? false,
+      rentDueDay: rentDueDay ?? 5,
+      notes,
+    },
+  });
+
+  await prisma.unit.update({ where: { id: unitId }, data: { status: 'OCCUPIED' } });
+  await generateMonthlyRentRecords(contract.id);
+
+  res.status(201).json(contract);
+}
+
+export async function updateContract(req: AuthRequest, res: Response) {
+  const { id } = req.params;
+  const contract = await prisma.contract.findFirst({
+    where: { id },
+    include: { unit: { include: { property: true } } },
+  });
+  if (!contract || contract.unit.property.userId !== req.userId!) {
+    res.status(404).json({ error: '找不到合約' }); return;
+  }
+  const { endDate, status, notes, depositPaid } = req.body;
+  const updated = await prisma.contract.update({
+    where: { id },
+    data: { endDate: endDate ? new Date(endDate) : undefined, status, notes, depositPaid },
+  });
+  if (status === 'TERMINATED' || status === 'EXPIRED') {
+    await prisma.unit.update({ where: { id: contract.unitId }, data: { status: 'VACANT' } });
+  }
+  res.json(updated);
+}
+
+export async function generateSignInvite(req: AuthRequest, res: Response) {
+  const { id } = req.params;
+  const contract = await prisma.contract.findFirst({
+    where: { id },
+    include: {
+      unit: { include: { property: true } },
+      tenant: true,
+    },
+  });
+  if (!contract || contract.unit.property.userId !== req.userId!) {
+    res.status(404).json({ error: '找不到合約' }); return;
+  }
+  if (contract.signedAt) {
+    res.status(400).json({ error: '合約已完成簽署' }); return;
+  }
+
+  const token = crypto.randomBytes(24).toString('hex');
+  await prisma.contract.update({ where: { id }, data: { signToken: token } });
+
+  const baseUrl = process.env.APP_URL ?? 'http://localhost:6000';
+  const signUrl = `${baseUrl}/sign/${token}`;
+
+  const tenant = contract.tenant;
+  const unitNum = contract.unit.unitNumber;
+  const propName = contract.unit.property.name;
+
+  let sent = false;
+  if (tenant.lineUserId) {
+    const text = `📄 合約簽署邀請\n\n您好 ${tenant.name}，\n房東邀請您簽署 ${propName} ${unitNum} 的租賃合約。\n\n📋 合約期間：${new Date(contract.startDate).toLocaleDateString('zh-TW')} ～ ${new Date(contract.endDate).toLocaleDateString('zh-TW')}\n💰 月租金：NT$${Number(contract.monthlyRent).toLocaleString()}\n\n請點擊以下連結完成電子簽署：\n${signUrl}\n\n⚠️ 連結僅供本次簽署使用，請勿轉發。`;
+    sent = await sendTenantMessage(tenant.id, text);
+  }
+
+  res.json({ token, signUrl, sent });
+}
+
+export async function getContractByToken(req: Request, res: Response) {
+  const { token } = req.params;
+  const contract = await prisma.contract.findUnique({
+    where: { signToken: token },
+    include: {
+      unit: { include: { property: true } },
+      tenant: true,
+    },
+  });
+  if (!contract) { res.status(404).json({ error: '連結無效或已過期' }); return; }
+  res.json({
+    id: contract.id,
+    signedAt: contract.signedAt,
+    signerName: contract.signerName,
+    startDate: contract.startDate,
+    endDate: contract.endDate,
+    monthlyRent: contract.monthlyRent,
+    depositAmount: contract.depositAmount,
+    rentDueDay: contract.rentDueDay,
+    notes: contract.notes,
+    unit: { unitNumber: contract.unit.unitNumber },
+    property: { name: contract.unit.property.name, address: contract.unit.property.address },
+    tenant: { name: contract.tenant.name },
+  });
+}
+
+export async function signContractByToken(req: Request, res: Response) {
+  const { token } = req.params;
+  const { signerName, agreed } = req.body;
+  if (!agreed || !signerName) {
+    res.status(400).json({ error: '請填寫姓名並確認同意' }); return;
+  }
+
+  const contract = await prisma.contract.findUnique({ where: { signToken: token } });
+  if (!contract) { res.status(404).json({ error: '連結無效' }); return; }
+  if (contract.signedAt) { res.status(400).json({ error: '合約已完成簽署' }); return; }
+
+  const updated = await prisma.contract.update({
+    where: { id: contract.id },
+    data: { signedAt: new Date(), signerName },
+  });
+  res.json({ signedAt: updated.signedAt, message: '簽署完成，感謝您！' });
+}
