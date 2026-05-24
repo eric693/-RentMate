@@ -158,16 +158,92 @@ export default function ROIAnalysis() {
               </div>
             )}
 
-            {/* Rankings table */}
+            {/* Rankings */}
             <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden mb-5">
               <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
                 <div>
                   <h2 className="font-semibold text-gray-800">各房產排名</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">點擊「買入總價」欄位即可輸入，自動計算年化投報率</p>
+                  <p className="text-xs text-gray-400 mt-0.5">點擊「買入總價」即可輸入，自動計算年化投報率</p>
                 </div>
                 <TrendingUp className="w-5 h-5 text-brand" />
               </div>
-              <div className="overflow-x-auto">
+
+              {/* Mobile card list */}
+              <div className="md:hidden divide-y divide-gray-50">
+                {data.map((p, i) => {
+                  const occ = p.totalUnits > 0 ? Math.round((p.occupiedUnits / p.totalUnits) * 100) : 0;
+                  return (
+                    <div key={p.id} className="p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold flex-shrink-0 ${i === 0 ? 'bg-brand text-white' : 'bg-gray-100 text-gray-500'}`}>{i + 1}</span>
+                          <div>
+                            <div className="font-semibold text-gray-800 text-sm">{p.name}</div>
+                            <div className="text-xs text-gray-400">{p.address}</div>
+                          </div>
+                        </div>
+                        {p.annualizedROI !== null ? (
+                          <span className={`text-lg font-bold ${p.annualizedROI >= 5 ? 'text-brand' : p.annualizedROI >= 3 ? 'text-amber-500' : 'text-red-400'}`}>
+                            {p.annualizedROI}%
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-300">設定買入價</span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 mb-3 text-xs">
+                        <div className="bg-warm rounded-xl p-2.5">
+                          <div className="text-gray-400 mb-0.5">入住率</div>
+                          <div className={`font-semibold ${occ === 100 ? 'text-brand' : occ >= 70 ? 'text-amber-500' : 'text-red-400'}`}>{occ}% · {p.occupiedUnits}/{p.totalUnits} 間</div>
+                        </div>
+                        <div className="bg-warm rounded-xl p-2.5">
+                          <div className="text-gray-400 mb-0.5">淨收益</div>
+                          <div className={`font-semibold ${p.netIncome >= 0 ? 'text-brand' : 'text-red-500'}`}>{fmt(p.netIncome)}</div>
+                        </div>
+                        <div className="bg-warm rounded-xl p-2.5">
+                          <div className="text-gray-400 mb-0.5">已收款</div>
+                          <div className="font-semibold text-gray-700">{fmt(p.totalCollected)}</div>
+                        </div>
+                        <div className="bg-warm rounded-xl p-2.5">
+                          <div className="text-gray-400 mb-0.5">空置損失</div>
+                          <div className={`font-semibold ${p.vacancyCost > 0 ? 'text-orange-500' : 'text-gray-300'}`}>{p.vacancyCost > 0 ? fmt(p.vacancyCost) : '--'}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2">
+                        <span className="text-xs text-gray-400">買入總價</span>
+                        {editingId === p.id ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              className="w-28 border border-gray-200 rounded-lg px-2 py-1 text-xs text-right focus:outline-none focus:border-brand"
+                              value={editPrice}
+                              onChange={(e) => setEditPrice(e.target.value)}
+                              placeholder="e.g. 8000000"
+                              type="number"
+                              autoFocus
+                            />
+                            <button onClick={() => savePurchasePrice(p.id)} disabled={saving} className="w-6 h-6 flex items-center justify-center text-brand hover:bg-brand/10 rounded">
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => setEditingId(null)} className="w-6 h-6 flex items-center justify-center text-gray-400 hover:bg-gray-100 rounded">
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => { setEditingId(p.id); setEditPrice(p.purchasePrice?.toString() ?? ''); }}
+                            className="flex items-center gap-1 text-xs text-gray-600 hover:text-brand"
+                          >
+                            {p.purchasePrice ? fmt(p.purchasePrice) : <span className="text-gray-300">點擊設定</span>}
+                            <Pencil className="w-3 h-3 text-gray-300" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop table */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-warm text-xs text-gray-400 font-medium">

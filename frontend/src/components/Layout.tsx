@@ -165,7 +165,7 @@ export default function Layout() {
             { to: '/', label: '總覽', icon: LayoutDashboard, exact: true },
             { to: '/properties', label: '房務', icon: Building2, exact: false },
             { to: '/finance', label: '帳務', icon: CreditCard, exact: false },
-            { to: '/maintenance', label: '報修', icon: Wrench, exact: false },
+            { to: '/roi', label: '投報', icon: TrendingUp, exact: false },
             { to: '/settings', label: '設定', icon: Settings, exact: false },
           ].map((item) => (
             <NavLink

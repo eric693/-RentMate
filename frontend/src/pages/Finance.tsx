@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, FileSpreadsheet } from 'lucide-react';
 import api from '../api/client';
 
 interface FinanceOverview {
@@ -49,7 +49,23 @@ export default function Finance() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [data, setData] = useState<FinanceOverview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const navigate = useNavigate();
+
+  async function downloadTaxReport(exportYear: number) {
+    setExporting(true);
+    try {
+      const res = await api.get(`/tax-export?year=${exportYear}`, { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `RentMate_${exportYear}_租賃所得申報表.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -73,7 +89,15 @@ export default function Finance() {
           <h1 className="text-xl font-bold text-gray-800">財務總覽</h1>
           <p className="text-xs text-gray-400 mt-0.5">{year} 年 {month} 月的收支彙整與趨勢分析</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <button
+            onClick={() => downloadTaxReport(year)}
+            disabled={exporting}
+            className="flex items-center gap-1.5 text-xs border border-brand text-brand rounded-lg px-3 py-1.5 hover:bg-brand/5 transition-colors disabled:opacity-50"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            {exporting ? '產生中…' : `匯出 ${year} 年報稅表`}
+          </button>
           <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="input text-xs py-1.5 px-2 w-20">
             {[now.getFullYear() - 1, now.getFullYear()].map((y) => <option key={y}>{y}</option>)}
           </select>

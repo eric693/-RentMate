@@ -1,0 +1,153 @@
+import { Response } from 'express';
+import * as XLSX from 'xlsx';
+import { AuthRequest } from '../middleware/auth';
+import { prisma } from '../app';
+
+export async function exportTaxReport(req: AuthRequest, res: Response) {
+  const userId = req.userId!;
+  const year = Number(req.query.year) || new Date().getFullYear();
+  const startDate = new Date(`${year}-01-01T00:00:00`);
+  const endDate = new Date(`${year}-12-31T23:59:59`);
+
+  const [properties, user] = await Promise.all([
+    prisma.property.findMany({
+      where: { userId },
+      include: {
+        units: {
+          include: {
+            contracts: {
+              include: {
+                tenant: { select: { name: true } },
+                rentRecords: { where: { dueDate: { gte: startDate, lte: endDate } } },
+              },
+            },
+            expenses: { where: { date: { gte: startDate, lte: endDate } } },
+          },
+        },
+        expenses: { where: { date: { gte: startDate, lte: endDate } } },
+      },
+    }),
+    prisma.user.findUnique({ where: { id: userId }, select: { name: true } }),
+  ]);
+
+  const STATUS_ZH: Record<string, string> = {
+    PAID: '已收', PENDING: '待收', OVERDUE: '逾期', PARTIAL: '部分收款',
+  };
+
+  function paidAmount(record: { status: string; paidAmount: any; amount: any }): number {
+    if (record.status === 'PAID') return record.paidAmount ? Number(record.paidAmount) : Number(record.amount);
+    if (record.status === 'PARTIAL' && record.paidAmount) return Number(record.paidAmount);
+    return 0;
+  }
+
+  const wb = XLSX.utils.book_new();
+
+  // ── Sheet 1: 年度總覽 ─────────────────────────────────────────────
+  let grandIncome = 0;
+  let grandExpenses = 0;
+
+  const s1: any[][] = [
+    [`${year} 年度租賃所得申報參考表`],
+    [`製表人：${user?.name ?? ''}`, '', `製表日期：${new Date().toLocaleDateString('zh-TW')}`],
+    [],
+    ['房產名稱', '地址', '房間數', '年租金收入', '實際費用', '淨所得（實際）', '淨所得（標準扣除43%）'],
+  ];
+
+  for (const p of properties) {
+    let income = 0;
+    let expenses = p.expenses.reduce((s, e) => s + Number(e.amount), 0);
+    for (const u of p.units) {
+      for (const c of u.contracts) for (const r of c.rentRecords) income += paidAmount(r);
+      expenses += u.expenses.reduce((s, e) => s + Number(e.amount), 0);
+    }
+    grandIncome += income;
+    grandExpenses += expenses;
+    s1.push([
+      p.name, p.address, p.units.length,
+      income, Math.round(expenses),
+      Math.round(income - expenses),
+      Math.round(income * 0.57),
+    ]);
+  }
+
+  s1.push([], [
+    '合計', '', '',
+    grandIncome, Math.round(grandExpenses),
+    Math.round(grandIncome - grandExpenses),
+    Math.round(grandIncome * 0.57),
+  ], [], [
+    '說明：「淨所得（標準扣除43%）」= 租金收入 × 57%，依財政部規定採標準必要費用扣除額。',
+  ], [
+    '      「淨所得（實際）」需備有費用單據佐證，建議選擇對您較有利的方式申報。',
+  ]);
+
+  const ws1 = XLSX.utils.aoa_to_sheet(s1);
+  ws1['!cols'] = [18, 26, 10, 14, 12, 16, 20].map((w) => ({ wch: w }));
+  XLSX.utils.book_append_sheet(wb, ws1, '年度總覽');
+
+  // ── Sheet 2: 月份收支明細 ─────────────────────────────────────────
+  const monthly: Record<number, { income: number; expenses: number }> = {};
+  for (let m = 1; m <= 12; m++) monthly[m] = { income: 0, expenses: 0 };
+
+  for (const p of properties) {
+    for (const u of p.units)
+      for (const c of u.contracts)
+        for (const r of c.rentRecords) {
+          const m = new Date(r.dueDate).getMonth() + 1;
+          monthly[m].income += paidAmount(r);
+        }
+    for (const e of p.expenses) monthly[new Date(e.date).getMonth() + 1].expenses += Number(e.amount);
+    for (const u of p.units)
+      for (const e of u.expenses) monthly[new Date(e.date).getMonth() + 1].expenses += Number(e.amount);
+  }
+
+  const s2: any[][] = [[`${year} 年度月份收支明細`], [], ['月份', '租金收入', '費用支出', '淨收益']];
+  for (let m = 1; m <= 12; m++) {
+    const { income, expenses } = monthly[m];
+    s2.push([`${m} 月`, Math.round(income), Math.round(expenses), Math.round(income - expenses)]);
+  }
+  s2.push([], [
+    '全年合計',
+    Math.round(Object.values(monthly).reduce((s, v) => s + v.income, 0)),
+    Math.round(Object.values(monthly).reduce((s, v) => s + v.expenses, 0)),
+    Math.round(Object.values(monthly).reduce((s, v) => s + v.income - v.expenses, 0)),
+  ]);
+
+  const ws2 = XLSX.utils.aoa_to_sheet(s2);
+  ws2['!cols'] = [8, 14, 12, 12].map((w) => ({ wch: w }));
+  XLSX.utils.book_append_sheet(wb, ws2, '月份收支明細');
+
+  // ── Sheet 3: 各房間明細 ───────────────────────────────────────────
+  const s3: any[][] = [
+    [`${year} 年度各房間租金明細`], [],
+    ['房產', '地址', '房間', '租客', '月租金', '月份', '應收', '實收', '狀態'],
+  ];
+
+  for (const p of properties)
+    for (const u of p.units)
+      for (const c of u.contracts)
+        for (const r of c.rentRecords) {
+          const m = new Date(r.dueDate).getMonth() + 1;
+          s3.push([
+            p.name, p.address, u.unitNumber,
+            c.tenant?.name ?? '—',
+            Number(u.monthlyRent),
+            `${m} 月`,
+            Number(r.amount),
+            paidAmount(r),
+            STATUS_ZH[r.status] ?? r.status,
+          ]);
+        }
+
+  const ws3 = XLSX.utils.aoa_to_sheet(s3);
+  ws3['!cols'] = [14, 22, 8, 10, 10, 6, 10, 10, 10].map((w) => ({ wch: w }));
+  XLSX.utils.book_append_sheet(wb, ws3, '各房間明細');
+
+  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename*=UTF-8''RentMate_${year}%E7%A7%9F%E8%B3%83%E6%89%80%E5%BE%97%E7%94%B3%E5%A0%B1%E8%A1%A8.xlsx`,
+  );
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.send(buf);
+}

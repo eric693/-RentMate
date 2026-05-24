@@ -16,6 +16,7 @@ import { webhook, getLandlordBinding, generateLandlordBindingCode, unbindLandlor
 import { getCalendarEvents } from '../controllers/calendarController';
 import { getCollectionWorkbench, getFinanceOverview } from '../controllers/collectionWorkbenchController';
 import { getROIAnalysis } from '../controllers/roiController';
+import { exportTaxReport } from '../controllers/taxExportController';
 
 const router = Router();
 
@@ -91,6 +92,7 @@ router.get('/calendar', requireAuth, getCalendarEvents);
 router.get('/collection-workbench', requireAuth, getCollectionWorkbench);
 router.get('/finance-overview', requireAuth, getFinanceOverview);
 router.get('/roi', requireAuth, getROIAnalysis);
+router.get('/tax-export', requireAuth, exportTaxReport);
 
 // Listings (vacant units)
 router.get('/listings/vacant', requireAuth, getVacantUnits);

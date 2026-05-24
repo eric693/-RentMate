@@ -18,6 +18,7 @@ const lineController_1 = require("../controllers/lineController");
 const calendarController_1 = require("../controllers/calendarController");
 const collectionWorkbenchController_1 = require("../controllers/collectionWorkbenchController");
 const roiController_1 = require("../controllers/roiController");
+const taxExportController_1 = require("../controllers/taxExportController");
 const router = (0, express_1.Router)();
 // Auth
 router.post('/auth/register', authController_1.register);
@@ -79,6 +80,7 @@ router.get('/calendar', auth_1.requireAuth, calendarController_1.getCalendarEven
 router.get('/collection-workbench', auth_1.requireAuth, collectionWorkbenchController_1.getCollectionWorkbench);
 router.get('/finance-overview', auth_1.requireAuth, collectionWorkbenchController_1.getFinanceOverview);
 router.get('/roi', auth_1.requireAuth, roiController_1.getROIAnalysis);
+router.get('/tax-export', auth_1.requireAuth, taxExportController_1.exportTaxReport);
 // Listings (vacant units)
 router.get('/listings/vacant', auth_1.requireAuth, listingController_1.getVacantUnits);
 router.post('/listings/units/:unitId', auth_1.requireAuth, listingController_1.addListing);
