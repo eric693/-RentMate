@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { X, Plus, Search, AlertTriangle, Calendar, User, Home, FileSignature, CheckCircle2, Send, Copy, Check } from 'lucide-react';
+import { X, Plus, Search, AlertTriangle, Calendar, User, Home, FileSignature, CheckCircle2, Send, Copy, Check, Wallet } from 'lucide-react';
 import api from '../api/client';
 import { Contract, Property, Tenant, Unit } from '../types';
+import DepositRefundModal from '../components/DepositRefundModal';
 
 type FilterType = 'all' | 'active' | 'expiring' | 'expired' | 'terminated';
 
@@ -16,6 +17,7 @@ export default function Contracts() {
   const [signResult, setSignResult] = useState<{ contractId: string; signUrl: string; sent: boolean } | null>(null);
   const [signingId, setSigningId] = useState<string | null>(null);
   const [copiedUrl, setCopiedUrl] = useState(false);
+  const [depositModal, setDepositModal] = useState<Contract | null>(null);
 
   useEffect(() => { fetchAll(); }, []);
 
@@ -230,8 +232,22 @@ export default function Contracts() {
                   </div>
                 )}
 
+                {/* Deposit refund status badge */}
+                {c.depositRefund && (
+                  <div className={`flex items-center gap-1.5 text-xs rounded-lg px-2.5 py-1.5 mb-2 w-fit ${
+                    c.depositRefund.status === 'COMPLETED'
+                      ? 'bg-green-50 text-green-600'
+                      : 'bg-yellow-50 text-yellow-700'
+                  }`}>
+                    <Wallet className="w-3.5 h-3.5" />
+                    {c.depositRefund.status === 'COMPLETED'
+                      ? `押金已退 NT$${Number(c.depositRefund.refundAmount).toLocaleString()}`
+                      : `退押進行中・應退 NT$${Number(c.depositRefund.refundAmount).toLocaleString()}`}
+                  </div>
+                )}
+
                 {c.status === 'ACTIVE' && (
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     {!c.signedAt && (
                       <button
                         onClick={() => sendSignInvite(c.id)}
@@ -243,6 +259,12 @@ export default function Contracts() {
                       </button>
                     )}
                     <button
+                      onClick={() => setDepositModal(c)}
+                      className="text-xs px-3 py-1.5 border border-orange-200 rounded-lg text-orange-600 hover:bg-orange-50 transition-colors flex items-center gap-1"
+                    >
+                      <Wallet className="w-3 h-3" />辦理退押
+                    </button>
+                    <button
                       onClick={() => terminate(c.id)}
                       className="text-xs px-3 py-1.5 border border-red-100 rounded-lg text-red-400 hover:bg-red-50 transition-colors"
                     >
@@ -253,6 +275,17 @@ export default function Contracts() {
                       每月 {c.rentDueDay} 日繳租
                     </div>
                   </div>
+                )}
+
+                {/* Terminated/Expired: show deposit button */}
+                {(c.status === 'TERMINATED' || c.status === 'EXPIRED') && c.depositPaid && (
+                  <button
+                    onClick={() => setDepositModal(c)}
+                    className="text-xs px-3 py-1.5 border border-orange-200 rounded-lg text-orange-600 hover:bg-orange-50 transition-colors flex items-center gap-1 w-fit mt-1"
+                  >
+                    <Wallet className="w-3 h-3" />
+                    {c.depositRefund ? '查看退押明細' : '辦理退押'}
+                  </button>
                 )}
 
                 {/* Sign link result */}
@@ -286,6 +319,14 @@ export default function Contracts() {
           tenants={tenants}
           onClose={() => setShowAdd(false)}
           onSaved={() => { setShowAdd(false); fetchAll(); }}
+        />
+      )}
+
+      {depositModal && (
+        <DepositRefundModal
+          contract={depositModal}
+          onClose={() => setDepositModal(null)}
+          onSaved={() => { fetchAll(); }}
         />
       )}
     </div>

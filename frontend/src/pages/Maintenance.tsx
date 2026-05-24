@@ -198,7 +198,7 @@ function EditMaintenanceModal({ request, onClose, onSaved }: {
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
             <label className="block text-sm font-medium mb-1">狀態</label>
-            <select className="input" value={form.status} onChange={e => setForm({ ...form, status: e.target.value as any })}>
+            <select className="input" value={form.status} onChange={e => setForm({ ...form, status: e.target.value as MaintenanceRequest['status'] })}>
               <option value="PENDING">待處理</option>
               <option value="IN_PROGRESS">處理中</option>
               <option value="COMPLETED">已完成</option>

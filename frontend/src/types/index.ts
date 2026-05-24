@@ -57,6 +57,7 @@ export interface Contract {
   unit?: Unit & { property?: Property };
   tenant?: Tenant;
   rentRecords?: RentRecord[];
+  depositRefund?: DepositRefund;
 }
 
 export interface RentRecord {
@@ -101,6 +102,28 @@ export interface Expense {
   confirmedAt?: string;
   property?: { name: string };
   unit?: { unitNumber: string };
+}
+
+export type DepositRefundStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED';
+
+export interface DepositDeduction {
+  id: string;
+  description: string;
+  amount: number;
+  category: 'REPAIR' | 'CLEANING' | 'UTILITY' | 'OTHER';
+}
+
+export interface DepositRefund {
+  id: string;
+  contractId: string;
+  depositAmount: number;
+  totalDeductions: number;
+  refundAmount: number;
+  status: DepositRefundStatus;
+  refundDate?: string;
+  notes?: string;
+  notifiedAt?: string;
+  deductions: DepositDeduction[];
 }
 
 export interface DashboardData {

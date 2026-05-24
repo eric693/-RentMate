@@ -23,6 +23,7 @@ export async function getContracts(req: AuthRequest, res: Response) {
       unit: { include: { property: true } },
       tenant: true,
       rentRecords: { orderBy: { dueDate: 'desc' }, take: 1 },
+      depositRefund: { include: { deductions: true } },
     },
     orderBy: { endDate: 'asc' },
   });
