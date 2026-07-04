@@ -19,7 +19,8 @@ export async function sendLandlordMessage(userId: string, text: string): Promise
   const cl = getClient();
   if (!cl) return false;
   const binding = await prisma.lineBinding.findUnique({ where: { userId } });
-  if (!binding) return false;
+  // pending_ 為產生綁定碼時的佔位值，尚未完成 LINE 綁定，不可推播
+  if (!binding?.lineUserId || binding.lineUserId.startsWith('pending_')) return false;
   try {
     await cl.pushMessage({ to: binding.lineUserId, messages: [{ type: 'text', text }] });
     return true;
