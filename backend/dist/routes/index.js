@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const auth_1 = require("../middleware/auth");
+const tenantAuth_1 = require("../middleware/tenantAuth");
 const authController_1 = require("../controllers/authController");
 const dashboardController_1 = require("../controllers/dashboardController");
 const propertyController_1 = require("../controllers/propertyController");
@@ -19,6 +20,17 @@ const calendarController_1 = require("../controllers/calendarController");
 const collectionWorkbenchController_1 = require("../controllers/collectionWorkbenchController");
 const roiController_1 = require("../controllers/roiController");
 const taxExportController_1 = require("../controllers/taxExportController");
+const paymentController_1 = require("../controllers/paymentController");
+const contractController_2 = require("../controllers/contractController");
+const maintenanceController_2 = require("../controllers/maintenanceController");
+const taxExportController_2 = require("../controllers/taxExportController");
+const aiController_1 = require("../controllers/aiController");
+const handoverController_1 = require("../controllers/handoverController");
+const utilityBillController_1 = require("../controllers/utilityBillController");
+const creditController_1 = require("../controllers/creditController");
+const rentCompsController_1 = require("../controllers/rentCompsController");
+const tenantAuthController_1 = require("../controllers/tenantAuthController");
+const tenantPortalController_1 = require("../controllers/tenantPortalController");
 const router = (0, express_1.Router)();
 // Auth
 router.post('/auth/register', authController_1.register);
@@ -47,6 +59,15 @@ router.get('/contracts', auth_1.requireAuth, contractController_1.getContracts);
 router.post('/contracts', auth_1.requireAuth, contractController_1.createContract);
 router.put('/contracts/:id', auth_1.requireAuth, contractController_1.updateContract);
 router.post('/contracts/:id/sign-invite', auth_1.requireAuth, contractController_1.generateSignInvite);
+router.post('/contracts/:id/compliance-check', auth_1.requireAuth, contractController_2.checkCompliance);
+// Handover（點交相冊）
+router.get('/contracts/:contractId/handovers', auth_1.requireAuth, handoverController_1.getHandovers);
+router.post('/contracts/:contractId/handovers', auth_1.requireAuth, handoverController_1.createHandover);
+router.put('/handovers/:id', auth_1.requireAuth, handoverController_1.updateHandover);
+router.post('/handovers/:id/send', auth_1.requireAuth, handoverController_1.sendHandoverForConfirmation);
+// Public handover confirmation (no auth)
+router.get('/handovers/confirm/:token', handoverController_1.getHandoverByToken);
+router.post('/handovers/confirm/:token', handoverController_1.confirmHandoverByToken);
 // Public signing endpoints (no auth)
 router.get('/contracts/sign/:token', contractController_1.getContractByToken);
 router.post('/contracts/sign/:token', contractController_1.signContractByToken);
@@ -68,6 +89,7 @@ router.post('/rent-records/:id/remind', auth_1.requireAuth, rentController_1.sen
 router.get('/maintenance', auth_1.requireAuth, maintenanceController_1.getMaintenanceRequests);
 router.post('/maintenance', auth_1.requireAuth, maintenanceController_1.createMaintenanceRequest);
 router.put('/maintenance/:id', auth_1.requireAuth, maintenanceController_1.updateMaintenanceRequest);
+router.post('/maintenance/:id/analyze', auth_1.requireAuth, maintenanceController_2.analyzeMaintenanceRequest);
 // Expenses
 router.get('/expenses', auth_1.requireAuth, expenseController_1.getExpenses);
 router.post('/expenses', auth_1.requireAuth, expenseController_1.createExpense);
@@ -81,15 +103,52 @@ router.get('/collection-workbench', auth_1.requireAuth, collectionWorkbenchContr
 router.get('/finance-overview', auth_1.requireAuth, collectionWorkbenchController_1.getFinanceOverview);
 router.get('/roi', auth_1.requireAuth, roiController_1.getROIAnalysis);
 router.get('/tax-export', auth_1.requireAuth, taxExportController_1.exportTaxReport);
+router.get('/tax-export/precheck', auth_1.requireAuth, taxExportController_2.taxPrecheck);
+// Utility bills（水電費分攤）
+router.get('/utility-bills', auth_1.requireAuth, utilityBillController_1.getUtilityBills);
+router.post('/utility-bills/preview', auth_1.requireAuth, utilityBillController_1.previewUtilitySplit);
+router.post('/utility-bills', auth_1.requireAuth, utilityBillController_1.createUtilityBill);
+router.post('/utility-bills/:id/bill', auth_1.requireAuth, utilityBillController_1.billUtilityToTenants);
+// Rent comps（在地租金行情）
+router.get('/rent-comps', auth_1.requireAuth, rentCompsController_1.getRentComps);
+router.get('/units/:unitId/pricing', auth_1.requireAuth, rentCompsController_1.getUnitPricing);
+// Tenant credit（租客信用分）
+router.get('/tenant-credit', auth_1.requireAuth, creditController_1.getTenantsCreditOverview);
+router.get('/tenants/:id/credit', auth_1.requireAuth, creditController_1.getTenantCredit);
+// AI（房東助理 / 財務洞察 / 合約條款草擬）
+router.post('/ai/assistant', auth_1.requireAuth, aiController_1.assistantChat);
+router.get('/ai/insights', auth_1.requireAuth, aiController_1.getFinancialInsights);
+router.post('/ai/draft-clauses', auth_1.requireAuth, aiController_1.draftClauses);
 // Listings (vacant units)
 router.get('/listings/vacant', auth_1.requireAuth, listingController_1.getVacantUnits);
 router.post('/listings/units/:unitId', auth_1.requireAuth, listingController_1.addListing);
 router.put('/listings/:id', auth_1.requireAuth, listingController_1.updateListing);
 router.delete('/listings/:id', auth_1.requireAuth, listingController_1.deleteListing);
+// Payments / 金流自動對帳
+router.get('/payments', auth_1.requireAuth, paymentController_1.getPayments);
+router.get('/payments/unmatched', auth_1.requireAuth, paymentController_1.getUnmatchedPayments);
+router.get('/payments/:id/suggestions', auth_1.requireAuth, paymentController_1.getMatchSuggestions);
+router.post('/payments/:id/match', auth_1.requireAuth, paymentController_1.matchPayment);
+router.post('/payments/simulate', auth_1.requireAuth, paymentController_1.simulatePayment);
+router.get('/contracts/:contractId/virtual-account', auth_1.requireAuth, paymentController_1.getContractVirtualAccount);
+// Webhook（對外，無 JWT）
+router.post('/payments/webhook/:provider', paymentController_1.paymentWebhook);
 // LINE
 router.post('/line/webhook', lineController_1.webhook);
 router.get('/line/binding', auth_1.requireAuth, lineController_1.getLandlordBinding);
 router.post('/line/binding/generate', auth_1.requireAuth, lineController_1.generateLandlordBindingCode);
 router.delete('/line/binding', auth_1.requireAuth, lineController_1.unbindLandlord);
 router.get('/line/tenants', auth_1.requireAuth, lineController_1.getTenantBindings);
+// ── 租客端 Portal（獨立 JWT，kind=tenant）──────────────────────────
+router.get('/tenant/auth/config', tenantAuthController_1.tenantAuthConfig);
+router.post('/tenant/auth/login', tenantAuthController_1.tenantLogin);
+router.get('/tenant/me', tenantAuth_1.requireTenant, tenantPortalController_1.tenantMe);
+router.get('/tenant/contracts', tenantAuth_1.requireTenant, tenantPortalController_1.tenantContracts);
+router.get('/tenant/rent-records', tenantAuth_1.requireTenant, tenantPortalController_1.tenantRentRecords);
+router.get('/tenant/payment-info', tenantAuth_1.requireTenant, tenantPortalController_1.tenantPaymentInfo);
+router.get('/tenant/maintenance', tenantAuth_1.requireTenant, tenantPortalController_1.tenantMaintenanceList);
+router.post('/tenant/maintenance', tenantAuth_1.requireTenant, tenantPortalController_1.tenantCreateMaintenance);
+router.get('/tenant/handovers', tenantAuth_1.requireTenant, handoverController_1.tenantHandovers);
+router.post('/tenant/handovers/:id/confirm', tenantAuth_1.requireTenant, handoverController_1.tenantConfirmHandover);
+router.get('/tenant/credit', tenantAuth_1.requireTenant, creditController_1.getMyCredit);
 exports.default = router;

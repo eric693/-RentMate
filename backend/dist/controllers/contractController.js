@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.checkCompliance = checkCompliance;
 exports.getContracts = getContracts;
 exports.createContract = createContract;
 exports.updateContract = updateContract;
@@ -12,7 +13,32 @@ exports.signContractByToken = signContractByToken;
 const app_1 = require("../app");
 const rentService_1 = require("../services/rentService");
 const lineService_1 = require("../services/lineService");
+const aiService_1 = require("../services/aiService");
 const crypto_1 = __importDefault(require("crypto"));
+// 合約合規檢查：依內政部應記載/不得記載事項，產生報告並存入 complianceResult
+async function checkCompliance(req, res) {
+    const { id } = req.params;
+    const contract = await app_1.prisma.contract.findFirst({
+        where: { id, unit: { property: { userId: req.userId } } },
+    });
+    if (!contract) {
+        res.status(404).json({ error: '找不到合約' });
+        return;
+    }
+    const result = await (0, aiService_1.checkContractCompliance)({
+        monthlyRent: Number(contract.monthlyRent),
+        depositAmount: Number(contract.depositAmount),
+        startDate: contract.startDate,
+        endDate: contract.endDate,
+        rentDueDay: contract.rentDueDay,
+        notes: contract.notes,
+    });
+    await app_1.prisma.contract.update({
+        where: { id },
+        data: { complianceResult: result, complianceCheckedAt: new Date() },
+    });
+    res.json(result);
+}
 async function getContracts(req, res) {
     const userId = req.userId;
     const { status } = req.query;

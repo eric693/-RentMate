@@ -235,6 +235,58 @@ export async function exportTaxReport(req: AuthRequest, res: Response) {
   ws3['!cols'] = [14, 22, 8, 10, 10, 6, 10, 10, 10].map((w) => ({ wch: w }));
   XLSX.utils.book_append_sheet(wb, ws3, '各房間明細');
 
+  // ── Sheet 4: 公益出租人試算 ───────────────────────────────────────
+  // 住宅法 §15：出租給租金補貼戶的公益出租人，每屋每月租金收入最高 NT$15,000 免納綜所稅，
+  // 超過部分再按 43% 標準必要費用率減除。此表以「房間 × 月」實收計算免稅額供試算參考。
+  const CHARITY_EXEMPT_PER_MONTH = 15000;
+  const s4: any[][] = [
+    [`${year} 年度公益出租人節稅試算（參考）`], [],
+    ['房產', '房間', '年租金收入', '免稅額（每月上限1.5萬）', '應稅收入', '淨所得（43%費用扣除後）'],
+  ];
+
+  let charityIncome = 0;
+  let charityExempt = 0;
+  for (const p of properties) {
+    for (const u of p.units) {
+      // 以房間為單位，按月加總實收後套用每月免稅上限
+      const byMonth = new Map<string, number>();
+      for (const c of u.contracts)
+        for (const r of c.rentRecords) {
+          const key = `${r.year}-${r.month}`;
+          byMonth.set(key, (byMonth.get(key) ?? 0) + paidAmount(r));
+        }
+      if (byMonth.size === 0) continue;
+      let income = 0;
+      let exempt = 0;
+      for (const v of byMonth.values()) {
+        income += v;
+        exempt += Math.min(v, CHARITY_EXEMPT_PER_MONTH);
+      }
+      if (income === 0) continue;
+      charityIncome += income;
+      charityExempt += exempt;
+      const taxable = income - exempt;
+      s4.push([p.name, u.unitNumber, income, exempt, taxable, Math.round(taxable * 0.57)]);
+    }
+  }
+
+  const charityTaxable = charityIncome - charityExempt;
+  s4.push([], [
+    '合計', '', charityIncome, charityExempt, charityTaxable, Math.round(charityTaxable * 0.57),
+  ], [], [
+    '說明：公益出租人資格＝將住宅出租給「領有租金補貼」的房客（或透過社會住宅包租代管出租）。',
+  ], [
+    '      符合資格者每屋每月租金收入 NT$15,000 以下免納綜所稅（住宅法第15條），本表為試算參考。',
+  ], [
+    '      另享房屋稅適用自住稅率、地價稅適用自用住宅用地稅率優惠，請向地方稅稽徵機關申請。',
+  ], [
+    '      實際免稅範圍以「屋」為單位認定，分租情形請以稅捐機關認定為準。',
+  ]);
+
+  const ws4 = XLSX.utils.aoa_to_sheet(s4);
+  ws4['!cols'] = [16, 10, 14, 22, 12, 22].map((w) => ({ wch: w }));
+  XLSX.utils.book_append_sheet(wb, ws4, '公益出租人試算');
+
   const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
   res.setHeader(
     'Content-Disposition',

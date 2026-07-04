@@ -206,6 +206,23 @@ export async function checkContractCompliance(contract: {
     }
   }
 
+  // 電費超收（113/7/15 租屋電費新制）：按度計費不得超過台電帳單「當期每度平均電價」，
+  // 且應向承租人揭露當期平均電價與用電度數。違者可處 3 萬～30 萬元罰鍰。
+  const kwhMatch = /[每一]\s*度(?:\s*電)?(?:\s*費)?[^0-9]{0,6}(\d+(?:\.\d+)?)\s*元/.exec(notes);
+  if (kwhMatch) {
+    const price = parseFloat(kwhMatch[1]);
+    issues.push({
+      severity: price > 4 ? 'HIGH' : 'MEDIUM',
+      type: 'PROHIBITED',
+      item: '電費計收',
+      detail:
+        `合約約定電費每度 NT$${price}。依租屋電費新制（113/7/15），按度計費不得超過台電當期每度平均電價` +
+        (price > 4
+          ? `，NT$${price}/度極可能超收（可處 3 萬～30 萬元罰鍰），請改為依台電帳單實際金額分攤。`
+          : `，請確認未超過當期平均電價，並向房客揭露平均電價與用電度數。`),
+    });
+  }
+
   const cl = getClient();
   if (!cl) {
     const score = Math.max(0, 100 - issues.length * 25);
