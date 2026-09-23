@@ -2,6 +2,10 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../app';
 import { getPrepaidStatus } from '../services/prepaidService';
+import { startOfTodayTaipei } from '../utils/dates';
+
+/** 到期日早於此時間點的租金單才算「已到期」（含今天到期的） */
+const endOfTodayTaipei = () => new Date(startOfTodayTaipei().getTime() + 86400000);
 
 const TZ = 'Asia/Taipei';
 
@@ -232,11 +236,17 @@ export async function getRentUtilityStats(req: AuthRequest, res: Response) {
     where: { year, contract: { unit: { property: { userId } } } },
     include: { contract: { select: { unitId: true } } },
   });
+  // 「未收」「未繳筆數」「收款率」只看已到期的租金單，未到期的不算欠繳
+  const cutoff = endOfTodayTaipei();
+  let rentDueToDate = 0;
+  let collectedToDate = 0;
   for (const r of rentRecords) {
     const m = months[r.month - 1];
     const due = Number(r.amount);
     const paid = Number(r.paidAmount ?? 0);
-    const unpaid = r.status !== 'PAID';
+    const isDue = r.dueDate < cutoff;
+    const unpaid = isDue && r.status !== 'PAID';
+    if (isDue) { rentDueToDate += due; collectedToDate += paid; }
     m.rentDue += due;
     m.rentCollected += paid;
     if (unpaid) m.unpaidCount += 1;
@@ -290,8 +300,9 @@ export async function getRentUtilityStats(req: AuthRequest, res: Response) {
     summary: {
       rentDue,
       rentCollected,
-      rentOutstanding: Math.max(rentDue - rentCollected, 0),
-      collectionRate: rentDue > 0 ? Math.round((rentCollected / rentDue) * 1000) / 10 : 0,
+      rentDueToDate,
+      rentOutstanding: Math.max(rentDueToDate - collectedToDate, 0),
+      collectionRate: rentDueToDate > 0 ? Math.round((collectedToDate / rentDueToDate) * 1000) / 10 : 0,
       unpaidCount: sum('unpaidCount'),
       electricityBill: sum('electricityBill'),
       electricityExpense: sum('electricityExpense'),
@@ -347,7 +358,8 @@ export async function getDormRecords(req: AuthRequest, res: Response) {
     }
     const unpaid = c
       ? await prisma.rentRecord.aggregate({
-          where: { contractId: c.id, status: { in: ['PENDING', 'OVERDUE', 'PARTIAL'] } },
+          // 只算已到期的；系統會預先開好未來幾個月的租金單，那些還不算欠繳
+          where: { contractId: c.id, status: { in: ['PENDING', 'OVERDUE', 'PARTIAL'] }, dueDate: { lt: endOfTodayTaipei() } },
           _count: true,
           _sum: { amount: true, paidAmount: true },
         })

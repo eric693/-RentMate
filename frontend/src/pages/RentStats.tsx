@@ -33,6 +33,7 @@ interface Stats {
   summary: {
     rentDue: number;
     rentCollected: number;
+    rentDueToDate: number;
     rentOutstanding: number;
     collectionRate: number;
     unpaidCount: number;
@@ -109,7 +110,7 @@ export default function RentStats() {
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
                 <Tile label="全年應收" value={money(s.rentDue)} />
                 <Tile label="全年已收" value={money(s.rentCollected)} tone="text-brand" />
-                <Tile label="尚未收" value={money(s.rentOutstanding)} tone={s.rentOutstanding > 0 ? 'text-red-500' : undefined} />
+                <Tile label="已到期未收" value={money(s.rentOutstanding)} tone={s.rentOutstanding > 0 ? 'text-red-500' : undefined} sub="不含還沒到期的月份" />
                 <Tile label="收款率" value={`${s.collectionRate}%`} sub={`未繳 ${s.unpaidCount} 筆`} />
               </div>
 
@@ -129,7 +130,7 @@ export default function RentStats() {
 
               <Card title="逐月明細">
                 <Table
-                  head={['月份', '應收', '已收', '未收', '未繳筆數']}
+                  head={['月份', '應收', '已收', '未收', '已到期未繳']}
                   rows={data!.months.map((m) => [
                     `${m.month} 月`, money(m.rentDue), money(m.rentCollected),
                     money(Math.max(m.rentDue - m.rentCollected, 0)), `${m.unpaidCount}`,
@@ -139,7 +140,7 @@ export default function RentStats() {
 
               <Card title="各房間房租">
                 <Table
-                  head={['物業', '房號', '應收', '已收', '未收', '未繳筆數']}
+                  head={['物業', '房號', '應收', '已收', '未收', '已到期未繳']}
                   rows={units.map((u) => [
                     u.propertyName, u.unitNumber, money(u.rentDue), money(u.rentCollected),
                     money(Math.max(u.rentDue - u.rentCollected, 0)), `${u.unpaidCount}`,
