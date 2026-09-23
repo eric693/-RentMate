@@ -42,7 +42,7 @@ async function getPrepaidStatus(unitId, threshold) {
     if (avg && avg > 0) {
         daysLeft = Math.max(0, Math.floor(balance / avg));
         const dt = new Date(Date.now() + daysLeft * 86400000);
-        depletionDate = dt.toISOString().split('T')[0];
+        depletionDate = dt.toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' }); // YYYY-MM-DD（台北日期）
     }
     return { unitId, balance, threshold: th, avgDailySpend: avg, daysLeft, depletionDate, low: balance <= th };
 }

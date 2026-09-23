@@ -1,4 +1,5 @@
 import { prisma } from '../app';
+import { rentDueDate, startOfTodayTaipei } from '../utils/dates';
 
 export async function generateMonthlyRentRecords(contractId: string) {
   const contract = await prisma.contract.findUnique({ where: { id: contractId } });
@@ -14,7 +15,7 @@ export async function generateMonthlyRentRecords(contractId: string) {
   while (current <= cutoff) {
     const year = current.getFullYear();
     const month = current.getMonth() + 1;
-    const dueDate = new Date(year, month - 1, contract.rentDueDay);
+    const dueDate = rentDueDate(year, month, contract.rentDueDay);
 
     await prisma.rentRecord.upsert({
       where: { contractId_year_month: { contractId, year, month } },
@@ -25,7 +26,7 @@ export async function generateMonthlyRentRecords(contractId: string) {
         month,
         dueDate,
         amount: contract.monthlyRent,
-        status: dueDate < now ? 'OVERDUE' : 'PENDING',
+        status: dueDate < startOfTodayTaipei(now) ? 'OVERDUE' : 'PENDING',
       },
     });
 

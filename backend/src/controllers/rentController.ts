@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../app';
 import { sendTenantMessage } from '../services/lineService';
+import { startOfTodayTaipei } from '../utils/dates';
 
 async function getUserUnitIds(userId: string): Promise<string[]> {
   const properties = await prisma.property.findMany({ where: { userId } });
@@ -74,7 +75,7 @@ export async function markOverdue(req: AuthRequest, res: Response) {
     where: {
       contractId: { in: contractIds },
       status: 'PENDING',
-      dueDate: { lt: now },
+      dueDate: { lt: startOfTodayTaipei(now) },
     },
     data: { status: 'OVERDUE' },
   });

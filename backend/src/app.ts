@@ -1,7 +1,10 @@
 import 'dotenv/config';
+// 讓 async 路由丟出的錯誤交給下方錯誤處理，而不是讓請求一直卡住沒有回應
+import 'express-async-errors';
 import path from 'path';
 import fs from 'fs';
-import express from 'express';
+import express, { NextFunction, Request, Response } from 'express';
+import { Prisma } from '@prisma/client';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
 import routes from './routes/index';
@@ -28,6 +31,22 @@ app.use('/uploads', express.static(UPLOAD_DIR));
 app.use('/api', routes);
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
+
+// 統一錯誤處理：資料格式錯誤回 400，其餘回 500，都用 JSON 讓前端顯示訊息
+app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+  console.error(`[${req.method} ${req.originalUrl}]`, err);
+  if (res.headersSent) return;
+  if (err instanceof Prisma.PrismaClientValidationError) {
+    res.status(400).json({ error: '資料格式不正確，請檢查欄位後再試一次' });
+    return;
+  }
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    if (err.code === 'P2002') { res.status(409).json({ error: '資料重複，已有相同的紀錄' }); return; }
+    if (err.code === 'P2025') { res.status(404).json({ error: '找不到資料' }); return; }
+    if (err.code === 'P2003') { res.status(409).json({ error: '這筆資料仍被其他資料使用，無法刪除' }); return; }
+  }
+  res.status(500).json({ error: '伺服器發生錯誤，請稍後再試' });
+});
 
 const PORT = Number(process.env.PORT ?? 3001);
 

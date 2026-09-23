@@ -14,6 +14,7 @@ const app_1 = require("../app");
 const lineService_1 = require("./lineService");
 const reminderService_1 = require("./reminderService");
 const prepaidService_1 = require("./prepaidService");
+const dates_1 = require("../utils/dates");
 // 通知排程器。
 // 舊版是寫死的 cron（每天 09:00 一次跑完所有事、每月 1 日 08:00 產生租金單）。
 // 現在改成：每個房東 × 每種通知一列規則，各自有執行時間與參數；
@@ -62,7 +63,7 @@ async function generateRentRecords(userId) {
         },
     });
     for (const contract of contracts) {
-        const dueDate = new Date(year, month - 1, contract.rentDueDay);
+        const dueDate = (0, dates_1.rentDueDate)(year, month, contract.rentDueDay);
         await app_1.prisma.rentRecord.upsert({
             where: { contractId_year_month: { contractId: contract.id, year, month } },
             update: {},
@@ -83,7 +84,7 @@ async function markOverdue(userId) {
     const result = await app_1.prisma.rentRecord.updateMany({
         where: {
             status: 'PENDING',
-            dueDate: { lt: new Date() },
+            dueDate: { lt: (0, dates_1.startOfTodayTaipei)() },
             contract: { unit: { property: { userId } } },
         },
         data: { status: 'OVERDUE' },

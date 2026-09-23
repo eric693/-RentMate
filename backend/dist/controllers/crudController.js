@@ -13,6 +13,7 @@ exports.deletePrepaidRecord = deletePrepaidRecord;
 exports.updateContractTemplate = updateContractTemplate;
 exports.deletePayment = deletePayment;
 const app_1 = require("../app");
+const dates_1 = require("../utils/dates");
 const num = (v) => (v === '' || v == null ? undefined : Number(v));
 const date = (v) => (v ? new Date(String(v)) : undefined);
 // ── 租金記錄 ──────────────────────────────────────────────────────
@@ -42,13 +43,12 @@ async function createRentRecord(req, res) {
         res.status(409).json({ error: `${y}/${m} 已有租金單，請直接編輯` });
         return;
     }
-    const lastDay = new Date(y, m, 0).getDate();
-    const due = date(dueDate) ?? new Date(`${y}-${String(m).padStart(2, '0')}-${String(Math.min(contract.rentDueDay, lastDay)).padStart(2, '0')}T00:00:00+08:00`);
+    const due = date(dueDate) ?? (0, dates_1.rentDueDate)(y, m, contract.rentDueDay);
     const record = await app_1.prisma.rentRecord.create({
         data: {
             contractId, year: y, month: m, dueDate: due,
             amount: num(amount) ?? Number(contract.monthlyRent),
-            status: due < new Date() ? 'OVERDUE' : 'PENDING',
+            status: due < (0, dates_1.startOfTodayTaipei)() ? 'OVERDUE' : 'PENDING',
             notes: notes || null,
         },
     });

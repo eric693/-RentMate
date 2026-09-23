@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateMonthlyRentRecords = generateMonthlyRentRecords;
 const app_1 = require("../app");
+const dates_1 = require("../utils/dates");
 async function generateMonthlyRentRecords(contractId) {
     const contract = await app_1.prisma.contract.findUnique({ where: { id: contractId } });
     if (!contract)
@@ -14,7 +15,7 @@ async function generateMonthlyRentRecords(contractId) {
     while (current <= cutoff) {
         const year = current.getFullYear();
         const month = current.getMonth() + 1;
-        const dueDate = new Date(year, month - 1, contract.rentDueDay);
+        const dueDate = (0, dates_1.rentDueDate)(year, month, contract.rentDueDay);
         await app_1.prisma.rentRecord.upsert({
             where: { contractId_year_month: { contractId, year, month } },
             update: {},
@@ -24,7 +25,7 @@ async function generateMonthlyRentRecords(contractId) {
                 month,
                 dueDate,
                 amount: contract.monthlyRent,
-                status: dueDate < now ? 'OVERDUE' : 'PENDING',
+                status: dueDate < (0, dates_1.startOfTodayTaipei)(now) ? 'OVERDUE' : 'PENDING',
             },
         });
         current = new Date(current.getFullYear(), current.getMonth() + 1, 1);

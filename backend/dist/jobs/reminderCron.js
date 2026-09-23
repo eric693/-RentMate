@@ -8,6 +8,7 @@ const node_cron_1 = __importDefault(require("node-cron"));
 const app_1 = require("../app");
 const lineService_1 = require("../services/lineService");
 const reminderService_1 = require("../services/reminderService");
+const dates_1 = require("../utils/dates");
 function startReminderJobs() {
     // Daily at 9:00 AM — mark overdue + smart reminders + contract expiry
     node_cron_1.default.schedule('0 9 * * *', async () => {
@@ -25,7 +26,7 @@ function startReminderJobs() {
 async function markOverdueRents() {
     const now = new Date();
     const result = await app_1.prisma.rentRecord.updateMany({
-        where: { status: 'PENDING', dueDate: { lt: now } },
+        where: { status: 'PENDING', dueDate: { lt: (0, dates_1.startOfTodayTaipei)(now) } },
         data: { status: 'OVERDUE' },
     });
     if (result.count > 0)
@@ -104,7 +105,7 @@ async function generateNewMonthRentRecords() {
         where: { status: 'ACTIVE', endDate: { gte: now } },
     });
     for (const contract of contracts) {
-        const dueDate = new Date(year, month - 1, contract.rentDueDay);
+        const dueDate = (0, dates_1.rentDueDate)(year, month, contract.rentDueDay);
         await app_1.prisma.rentRecord.upsert({
             where: { contractId_year_month: { contractId: contract.id, year, month } },
             update: {},

@@ -6,6 +6,7 @@ exports.markOverdue = markOverdue;
 exports.sendReminder = sendReminder;
 const app_1 = require("../app");
 const lineService_1 = require("../services/lineService");
+const dates_1 = require("../utils/dates");
 async function getUserUnitIds(userId) {
     const properties = await app_1.prisma.property.findMany({ where: { userId } });
     const propertyIds = properties.map((p) => p.id);
@@ -70,7 +71,7 @@ async function markOverdue(req, res) {
         where: {
             contractId: { in: contractIds },
             status: 'PENDING',
-            dueDate: { lt: now },
+            dueDate: { lt: (0, dates_1.startOfTodayTaipei)(now) },
         },
         data: { status: 'OVERDUE' },
     });

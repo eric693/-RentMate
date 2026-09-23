@@ -4,6 +4,7 @@ import { prisma } from '../app';
 import { sendLandlordMessage, sendTenantMessage } from './lineService';
 import { runDailyReminders } from './reminderService';
 import { checkPrepaidBalances } from './prepaidService';
+import { rentDueDate, startOfTodayTaipei } from '../utils/dates';
 
 // 通知排程器。
 // 舊版是寫死的 cron（每天 09:00 一次跑完所有事、每月 1 日 08:00 產生租金單）。
@@ -69,7 +70,7 @@ async function generateRentRecords(userId: string) {
   });
 
   for (const contract of contracts) {
-    const dueDate = new Date(year, month - 1, contract.rentDueDay);
+    const dueDate = rentDueDate(year, month, contract.rentDueDay);
     await prisma.rentRecord.upsert({
       where: { contractId_year_month: { contractId: contract.id, year, month } },
       update: {},
@@ -91,7 +92,7 @@ async function markOverdue(userId: string) {
   const result = await prisma.rentRecord.updateMany({
     where: {
       status: 'PENDING',
-      dueDate: { lt: new Date() },
+      dueDate: { lt: startOfTodayTaipei() },
       contract: { unit: { property: { userId } } },
     },
     data: { status: 'OVERDUE' },

@@ -3,6 +3,7 @@ import { Response } from 'express';
 import { Prisma } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../app';
+import { rentDueDate, startOfTodayTaipei } from '../utils/dates';
 
 const num = (v: unknown) => (v === '' || v == null ? undefined : Number(v));
 const date = (v: unknown) => (v ? new Date(String(v)) : undefined);
@@ -29,13 +30,12 @@ export async function createRentRecord(req: AuthRequest, res: Response) {
   const exists = await prisma.rentRecord.findUnique({ where: { contractId_year_month: { contractId, year: y, month: m } } });
   if (exists) { res.status(409).json({ error: `${y}/${m} 已有租金單，請直接編輯` }); return; }
 
-  const lastDay = new Date(y, m, 0).getDate();
-  const due = date(dueDate) ?? new Date(`${y}-${String(m).padStart(2, '0')}-${String(Math.min(contract.rentDueDay, lastDay)).padStart(2, '0')}T00:00:00+08:00`);
+  const due = date(dueDate) ?? rentDueDate(y, m, contract.rentDueDay);
   const record = await prisma.rentRecord.create({
     data: {
       contractId, year: y, month: m, dueDate: due,
       amount: num(amount) ?? Number(contract.monthlyRent),
-      status: due < new Date() ? 'OVERDUE' : 'PENDING',
+      status: due < startOfTodayTaipei() ? 'OVERDUE' : 'PENDING',
       notes: notes || null,
     },
   });

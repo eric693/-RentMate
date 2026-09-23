@@ -67,6 +67,16 @@ export async function createContract(req: AuthRequest, res: Response) {
   if (!unit || unit.property.userId !== req.userId!) {
     res.status(404).json({ error: '找不到房間' }); return;
   }
+  const tenant = await prisma.tenant.findFirst({ where: { id: tenantId, userId: req.userId! } });
+  if (!tenant) { res.status(404).json({ error: '找不到租客' }); return; }
+
+  // 表單送來的數字是字串，空字串代表沒填
+  const rent = Number(monthlyRent);
+  const deposit = depositAmount === undefined || depositAmount === '' ? rent * 2 : Number(depositAmount);
+  const dueDay = rentDueDay === undefined || rentDueDay === '' ? 5 : Number(rentDueDay);
+  if (!(rent > 0) || !(deposit >= 0)) { res.status(400).json({ error: '租金或押金金額不正確' }); return; }
+  if (!Number.isInteger(dueDay) || dueDay < 1 || dueDay > 31) { res.status(400).json({ error: '每月繳租日需為 1～31' }); return; }
+  if (new Date(endDate) <= new Date(startDate)) { res.status(400).json({ error: '結束日期需晚於開始日期' }); return; }
 
   const contract = await prisma.contract.create({
     data: {
@@ -74,11 +84,11 @@ export async function createContract(req: AuthRequest, res: Response) {
       tenantId,
       startDate: new Date(startDate),
       endDate: new Date(endDate),
-      monthlyRent,
-      depositAmount: depositAmount ?? monthlyRent * 2,
+      monthlyRent: rent,
+      depositAmount: deposit,
       depositPaid: depositPaid ?? false,
-      rentDueDay: rentDueDay ?? 5,
-      notes,
+      rentDueDay: dueDay,
+      notes: notes || null,
     },
   });
 
