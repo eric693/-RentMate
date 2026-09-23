@@ -168,6 +168,7 @@ function MyAccount({ onSaved }: { onSaved: () => void }) {
   const [form, setForm] = useState({ name: user?.name ?? '', email: user?.email ?? '', currentPassword: '', newPassword: '', confirm: '' });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState('');
   // 密碼欄預設收起：iPhone Safari 會自動把「建議的高強度密碼」填進新密碼欄，
   // 使用者沒注意就存下去，密碼就被換成自己不知道的值。要改密碼時才展開。
   const [changePw, setChangePw] = useState(false);
@@ -179,6 +180,7 @@ function MyAccount({ onSaved }: { onSaved: () => void }) {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    setDone('');
     if (changePw && form.newPassword !== form.confirm) { setError('兩次輸入的新密碼不一樣'); return; }
     if (changePw && form.newPassword.length < 6) { setError('新密碼至少 6 碼'); return; }
     setSaving(true);
@@ -189,6 +191,9 @@ function MyAccount({ onSaved }: { onSaved: () => void }) {
         newPassword: changePw ? form.newPassword : undefined,
       });
       setForm((f) => ({ ...f, currentPassword: '', newPassword: '', confirm: '' }));
+      setDone(changePw
+        ? '已儲存。密碼已經改成您剛才輸入的新密碼，之後登入與驗證請用新密碼。'
+        : '已儲存。');
       setChangePw(false);
       onSaved();
     } catch (err) {
@@ -231,20 +236,21 @@ function MyAccount({ onSaved }: { onSaved: () => void }) {
         {changePw && (
           <>
             <label className="block text-xs text-gray-500">新密碼（至少 6 碼）
-              <input type={pwType} autoComplete="new-password" className="input mt-1" value={form.newPassword} onChange={(e) => set('newPassword', e.target.value)} required />
+              <input type={pwType} autoCapitalize="none" autoCorrect="off" autoComplete="new-password" className="input mt-1" value={form.newPassword} onChange={(e) => set('newPassword', e.target.value)} required />
             </label>
             <label className="block text-xs text-gray-500">再輸入一次新密碼
-              <input type={pwType} autoComplete="new-password" className="input mt-1" value={form.confirm} onChange={(e) => set('confirm', e.target.value)} required />
+              <input type={pwType} autoCapitalize="none" autoCorrect="off" autoComplete="new-password" className="input mt-1" value={form.confirm} onChange={(e) => set('confirm', e.target.value)} required />
             </label>
           </>
         )}
         {needCurrent && (
           <label className="block text-xs text-gray-500 sm:col-span-2">目前密碼（修改帳號或密碼需驗證）
-            <input type={pwType} autoComplete="current-password" className="input mt-1" value={form.currentPassword} onChange={(e) => set('currentPassword', e.target.value)} required />
+            <input type={pwType} autoCapitalize="none" autoCorrect="off" autoComplete="current-password" className="input mt-1" value={form.currentPassword} onChange={(e) => set('currentPassword', e.target.value)} required />
           </label>
         )}
       </div>
       {error && <div className="text-xs text-red-500 mt-2">{error}</div>}
+      {done && <div className="text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2 mt-2">{done}</div>}
       <div className="flex justify-end mt-3">
         <button type="submit" disabled={saving} className="btn-primary text-sm disabled:opacity-50">{saving ? '儲存中…' : '儲存'}</button>
       </div>
