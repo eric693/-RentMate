@@ -49,6 +49,9 @@ router.get('/users/modules', auth_1.requireAuth, auth_1.requireAdmin, userContro
 router.post('/users', auth_1.requireAuth, auth_1.requireAdmin, userController_1.createUser);
 router.put('/users/:id', auth_1.requireAuth, auth_1.requireAdmin, userController_1.updateUser);
 router.delete('/users/:id', auth_1.requireAuth, auth_1.requireAdmin, userController_1.deleteUser);
+// 資料管理（僅管理員）
+router.get('/data/summary', auth_1.requireAuth, auth_1.requireAdmin, crudController_1.getDataSummary);
+router.post('/data/wipe', auth_1.requireAuth, auth_1.requireAdmin, crudController_1.wipeAllData);
 // Dashboard
 router.get('/dashboard', auth_1.requireAuth, dashboardController_1.getDashboard);
 // Properties

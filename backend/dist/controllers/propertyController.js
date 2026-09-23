@@ -5,6 +5,7 @@ exports.createProperty = createProperty;
 exports.updateProperty = updateProperty;
 exports.deleteProperty = deleteProperty;
 const app_1 = require("../app");
+const deletionService_1 = require("../services/deletionService");
 async function getProperties(req, res) {
     const properties = await app_1.prisma.property.findMany({
         where: { userId: req.userId },
@@ -67,6 +68,6 @@ async function deleteProperty(req, res) {
         res.status(404).json({ error: '找不到物業' });
         return;
     }
-    await app_1.prisma.property.delete({ where: { id } });
+    await (0, deletionService_1.removeProperty)(id); // 連同房間、合約、租金單、支出、水電帳單
     res.json({ success: true });
 }

@@ -45,6 +45,9 @@ app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
     if (err.code === 'P2025') { res.status(404).json({ error: '找不到資料' }); return; }
     if (err.code === 'P2003') { res.status(409).json({ error: '這筆資料仍被其他資料使用，無法刪除' }); return; }
   }
+  if (err instanceof Prisma.PrismaClientUnknownRequestError && /violates (RESTRICT|foreign key)/.test(err.message)) {
+    res.status(409).json({ error: '這筆資料仍被其他資料使用，無法刪除' }); return;
+  }
   res.status(500).json({ error: '伺服器發生錯誤，請稍後再試' });
 });
 

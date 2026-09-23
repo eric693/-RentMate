@@ -4,6 +4,8 @@ import { Prisma } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../app';
 import { rentDueDate, startOfTodayTaipei } from '../utils/dates';
+import { removeContract, countUserData, wipeUserData } from '../services/deletionService';
+import bcrypt from 'bcryptjs';
 
 const num = (v: unknown) => (v === '' || v == null ? undefined : Number(v));
 const date = (v: unknown) => (v ? new Date(String(v)) : undefined);
@@ -88,21 +90,7 @@ export async function deleteContract(req: AuthRequest, res: Response) {
   });
   if (!contract) { res.status(404).json({ error: '找不到合約' }); return; }
 
-  const recordIds = (await prisma.rentRecord.findMany({ where: { contractId: contract.id }, select: { id: true } })).map((r) => r.id);
-  await prisma.$transaction([
-    prisma.reminderLog.deleteMany({ where: { rentRecordId: { in: recordIds } } }),
-    prisma.payment.updateMany({
-      where: { contractId: contract.id },
-      data: { contractId: null, rentRecordId: null, virtualAccountId: null, status: 'UNMATCHED', reconciledAt: null },
-    }),
-    prisma.rentRecord.deleteMany({ where: { contractId: contract.id } }),
-    prisma.depositDeduction.deleteMany({ where: { depositRefund: { contractId: contract.id } } }),
-    prisma.depositRefund.deleteMany({ where: { contractId: contract.id } }),
-    prisma.contract.delete({ where: { id: contract.id } }), // 點交、虛擬帳號為 onDelete: Cascade
-  ]);
-
-  const stillActive = await prisma.contract.count({ where: { unitId: contract.unitId, status: 'ACTIVE' } });
-  if (stillActive === 0) await prisma.unit.update({ where: { id: contract.unitId }, data: { status: 'VACANT' } });
+  await removeContract(contract.id);
   res.json({ ok: true });
 }
 
@@ -298,4 +286,25 @@ export async function deletePayment(req: AuthRequest, res: Response) {
   }
   await prisma.payment.delete({ where: { id: payment.id } });
   res.json({ ok: true });
+}
+
+// ── 資料管理：清空所有營運資料 ─────────────────────────────────────
+
+export async function getDataSummary(req: AuthRequest, res: Response) {
+  res.json(await countUserData(req.userId!));
+}
+
+/** 清空全部資料（僅管理員，需輸入自己的密碼與確認文字） */
+export async function wipeAllData(req: AuthRequest, res: Response) {
+  const { password, confirmText } = req.body;
+  if (confirmText !== '清空全部資料') {
+    res.status(400).json({ error: '請輸入「清空全部資料」確認' }); return;
+  }
+  const me = await prisma.user.findUnique({ where: { id: req.authUserId! } });
+  if (!me || !(await bcrypt.compare(String(password ?? ''), me.password))) {
+    res.status(400).json({ error: '密碼不正確' }); return;
+  }
+  const before = await countUserData(req.userId!);
+  await wipeUserData(req.userId!);
+  res.json({ ok: true, deleted: before });
 }

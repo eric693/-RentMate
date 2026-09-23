@@ -10,6 +10,7 @@ exports.deleteTenant = deleteTenant;
 exports.generateTenantBindingCode = generateTenantBindingCode;
 const app_1 = require("../app");
 const crypto_1 = __importDefault(require("crypto"));
+const deletionService_1 = require("../services/deletionService");
 async function getTenants(req, res) {
     const tenants = await app_1.prisma.tenant.findMany({
         where: { userId: req.userId },
@@ -56,7 +57,7 @@ async function deleteTenant(req, res) {
         res.status(404).json({ error: '找不到租客' });
         return;
     }
-    await app_1.prisma.tenant.delete({ where: { id } });
+    await (0, deletionService_1.removeTenant)(id); // 連同該租客的合約與租金單
     res.json({ success: true });
 }
 async function generateTenantBindingCode(req, res) {

@@ -1,4 +1,7 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createRentRecord = createRentRecord;
 exports.updateRentRecord = updateRentRecord;
@@ -12,8 +15,12 @@ exports.updatePrepaidRecord = updatePrepaidRecord;
 exports.deletePrepaidRecord = deletePrepaidRecord;
 exports.updateContractTemplate = updateContractTemplate;
 exports.deletePayment = deletePayment;
+exports.getDataSummary = getDataSummary;
+exports.wipeAllData = wipeAllData;
 const app_1 = require("../app");
 const dates_1 = require("../utils/dates");
+const deletionService_1 = require("../services/deletionService");
+const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const num = (v) => (v === '' || v == null ? undefined : Number(v));
 const date = (v) => (v ? new Date(String(v)) : undefined);
 // ── 租金記錄 ──────────────────────────────────────────────────────
@@ -109,21 +116,7 @@ async function deleteContract(req, res) {
         res.status(404).json({ error: '找不到合約' });
         return;
     }
-    const recordIds = (await app_1.prisma.rentRecord.findMany({ where: { contractId: contract.id }, select: { id: true } })).map((r) => r.id);
-    await app_1.prisma.$transaction([
-        app_1.prisma.reminderLog.deleteMany({ where: { rentRecordId: { in: recordIds } } }),
-        app_1.prisma.payment.updateMany({
-            where: { contractId: contract.id },
-            data: { contractId: null, rentRecordId: null, virtualAccountId: null, status: 'UNMATCHED', reconciledAt: null },
-        }),
-        app_1.prisma.rentRecord.deleteMany({ where: { contractId: contract.id } }),
-        app_1.prisma.depositDeduction.deleteMany({ where: { depositRefund: { contractId: contract.id } } }),
-        app_1.prisma.depositRefund.deleteMany({ where: { contractId: contract.id } }),
-        app_1.prisma.contract.delete({ where: { id: contract.id } }), // 點交、虛擬帳號為 onDelete: Cascade
-    ]);
-    const stillActive = await app_1.prisma.contract.count({ where: { unitId: contract.unitId, status: 'ACTIVE' } });
-    if (stillActive === 0)
-        await app_1.prisma.unit.update({ where: { id: contract.unitId }, data: { status: 'VACANT' } });
+    await (0, deletionService_1.removeContract)(contract.id);
     res.json({ ok: true });
 }
 // ── 報修 ──────────────────────────────────────────────────────────
@@ -328,4 +321,24 @@ async function deletePayment(req, res) {
     }
     await app_1.prisma.payment.delete({ where: { id: payment.id } });
     res.json({ ok: true });
+}
+// ── 資料管理：清空所有營運資料 ─────────────────────────────────────
+async function getDataSummary(req, res) {
+    res.json(await (0, deletionService_1.countUserData)(req.userId));
+}
+/** 清空全部資料（僅管理員，需輸入自己的密碼與確認文字） */
+async function wipeAllData(req, res) {
+    const { password, confirmText } = req.body;
+    if (confirmText !== '清空全部資料') {
+        res.status(400).json({ error: '請輸入「清空全部資料」確認' });
+        return;
+    }
+    const me = await app_1.prisma.user.findUnique({ where: { id: req.authUserId } });
+    if (!me || !(await bcryptjs_1.default.compare(String(password ?? ''), me.password))) {
+        res.status(400).json({ error: '密碼不正確' });
+        return;
+    }
+    const before = await (0, deletionService_1.countUserData)(req.userId);
+    await (0, deletionService_1.wipeUserData)(req.userId);
+    res.json({ ok: true, deleted: before });
 }

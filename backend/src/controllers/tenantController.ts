@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../app';
 import crypto from 'crypto';
+import { removeTenant } from '../services/deletionService';
 
 export async function getTenants(req: AuthRequest, res: Response) {
   const tenants = await prisma.tenant.findMany({
@@ -46,7 +47,7 @@ export async function deleteTenant(req: AuthRequest, res: Response) {
   const { id } = req.params;
   const tenant = await prisma.tenant.findFirst({ where: { id, userId: req.userId! } });
   if (!tenant) { res.status(404).json({ error: '找不到租客' }); return; }
-  await prisma.tenant.delete({ where: { id } });
+  await removeTenant(id); // 連同該租客的合約與租金單
   res.json({ success: true });
 }
 

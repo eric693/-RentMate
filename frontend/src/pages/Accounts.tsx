@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, X, ShieldCheck, UserCog, KeyRound } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, ShieldCheck, UserCog, KeyRound, Database } from 'lucide-react';
 import api from '../api/client';
 import HowTo from '../components/HowTo';
 import SearchBox, { matches } from '../components/SearchBox';
@@ -149,6 +149,8 @@ export default function Accounts() {
           )}
         </div>
       )}
+
+      {admin && <DataManagement onWiped={() => flash('已清空所有資料')} />}
 
       {editing && (
         <StaffForm
@@ -347,6 +349,86 @@ function StaffForm({ user, modules, onClose, onSaved }: {
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+const DATA_LABELS: Record<string, string> = {
+  properties: '物業', units: '房間', tenants: '租客', contracts: '合約',
+  rentRecords: '租金紀錄', expenses: '支出', maintenance: '報修',
+};
+
+/** 資料管理：查看筆數、清空全部營運資料（例如刪掉示範資料重新開始） */
+function DataManagement({ onWiped }: { onWiped: () => void }) {
+  const [summary, setSummary] = useState<Record<string, number> | null>(null);
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState('');
+  const [confirmText, setConfirmText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = () => { api.get('/data/summary').then((r) => setSummary(r.data)).catch(() => {}); };
+  useEffect(load, []);
+
+  async function wipe(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      await api.post('/data/wipe', { password, confirmText });
+      setOpen(false);
+      setPassword('');
+      setConfirmText('');
+      load();
+      onWiped();
+      window.dispatchEvent(new Event('rentbell:refresh'));
+    } catch (err) {
+      setError(errMsg(err, '清空失敗'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-6 bg-white rounded-2xl border border-red-100 p-4">
+      <div className="text-sm font-semibold text-gray-700 mb-1 flex items-center gap-1.5">
+        <Database className="w-4 h-4 text-red-400" />資料管理
+      </div>
+      <p className="text-xs text-gray-500 mb-3">
+        單筆資料請到各頁面按「刪除」。要把示範資料全部刪掉、從頭開始，可用下方「清空所有資料」。
+      </p>
+      {summary && (
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {Object.entries(summary).map(([k, n]) => (
+            <span key={k} className="text-xs bg-gray-50 text-gray-600 px-2 py-1 rounded-lg">{DATA_LABELS[k] ?? k} {n} 筆</span>
+          ))}
+        </div>
+      )}
+      {!open ? (
+        <button onClick={() => setOpen(true)} className="text-sm text-red-500 border border-red-200 rounded-xl px-3 py-1.5 hover:bg-red-50">
+          清空所有資料
+        </button>
+      ) : (
+        <form onSubmit={wipe} className="space-y-2 bg-red-50 rounded-xl p-3">
+          <p className="text-xs text-red-600 leading-relaxed">
+            會永久刪除所有物業、房間、租客、合約、租金與電費紀錄、支出、報修、入帳資料，<strong>無法復原</strong>。
+            您的帳號、員工帳號、LINE 綁定、通知設定與租約範本會保留。
+          </p>
+          <label className="block text-xs text-gray-600">請輸入「清空全部資料」
+            <input className="input mt-1" value={confirmText} onChange={(e) => setConfirmText(e.target.value)} required />
+          </label>
+          <label className="block text-xs text-gray-600">您的登入密碼
+            <input type="password" autoCapitalize="none" autoComplete="current-password" className="input mt-1" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          </label>
+          {error && <div className="text-xs text-red-600">{error}</div>}
+          <div className="flex gap-2">
+            <button type="button" onClick={() => { setOpen(false); setError(''); }} className="flex-1 text-sm border border-gray-200 bg-white rounded-xl py-2">取消</button>
+            <button type="submit" disabled={busy || confirmText !== '清空全部資料'} className="flex-1 text-sm bg-red-500 text-white rounded-xl py-2 font-medium disabled:opacity-50">
+              {busy ? '清空中…' : '確定清空'}
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }

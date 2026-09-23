@@ -5,6 +5,7 @@ exports.createUnit = createUnit;
 exports.updateUnit = updateUnit;
 exports.deleteUnit = deleteUnit;
 const app_1 = require("../app");
+const deletionService_1 = require("../services/deletionService");
 async function getUnits(req, res) {
     const { propertyId } = req.params;
     const property = await app_1.prisma.property.findFirst({ where: { id: propertyId, userId: req.userId } });
@@ -70,6 +71,6 @@ async function deleteUnit(req, res) {
         res.status(404).json({ error: '找不到房間' });
         return;
     }
-    await app_1.prisma.unit.delete({ where: { id } });
+    await (0, deletionService_1.removeUnit)(id); // 連同合約、租金單、報修、支出、水電分攤、預付電表紀錄
     res.json({ success: true });
 }

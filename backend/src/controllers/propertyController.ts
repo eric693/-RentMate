@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../app';
+import { removeProperty } from '../services/deletionService';
 
 export async function getProperties(req: AuthRequest, res: Response) {
   const properties = await prisma.property.findMany({
@@ -61,6 +62,6 @@ export async function deleteProperty(req: AuthRequest, res: Response) {
   const { id } = req.params;
   const property = await prisma.property.findFirst({ where: { id, userId: req.userId! } });
   if (!property) { res.status(404).json({ error: '找不到物業' }); return; }
-  await prisma.property.delete({ where: { id } });
+  await removeProperty(id); // 連同房間、合約、租金單、支出、水電帳單
   res.json({ success: true });
 }

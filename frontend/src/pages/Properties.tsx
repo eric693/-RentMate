@@ -36,7 +36,7 @@ export default function Properties() {
   }
 
   async function deleteProperty(id: string) {
-    if (!confirm('確定刪除此物業？所有房間資料也將一併刪除。')) return;
+    if (!confirm('確定刪除此物業？\n底下所有房間、合約、租金紀錄、支出、水電帳單與報修都會一併刪除，無法復原。')) return;
     await api.delete(`/properties/${id}`);
     setSelectedProperty(null);
     fetchAll();
@@ -200,7 +200,7 @@ function PropertyCard({
   const totalRent = units.filter((u) => u.status === 'OCCUPIED').reduce((s, u) => s + Number(u.monthlyRent), 0);
 
   async function deleteUnit(unitId: string) {
-    if (!confirm('確定刪除此房間？')) return;
+    if (!confirm('確定刪除此房間？\n這間房的合約、租金紀錄、報修、電費紀錄都會一併刪除，無法復原。')) return;
     await api.delete(`/units/${unitId}`);
     onRefresh();
   }

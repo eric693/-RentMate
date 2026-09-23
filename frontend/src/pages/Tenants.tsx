@@ -53,7 +53,7 @@ export default function Tenants() {
   }
 
   async function deleteTenant(id: string) {
-    if (!confirm('確定要刪除此租客？')) return;
+    if (!confirm('確定要刪除此租客？\n會一併刪除這位租客的合約與租金紀錄，無法復原。')) return;
     await api.delete(`/tenants/${id}`);
     fetchAll();
   }

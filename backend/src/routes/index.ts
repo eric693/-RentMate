@@ -18,7 +18,7 @@ import { getTodayRentAlerts, getRentUtilityStats, getDormRecords } from '../cont
 import {
   createRentRecord, updateRentRecord, deleteRentRecord, deleteContract, deleteMaintenanceRequest,
   updateExpense, updateUtilityBill, deleteUtilityBill, updatePrepaidRecord, deletePrepaidRecord,
-  updateContractTemplate, deletePayment,
+  updateContractTemplate, deletePayment, getDataSummary, wipeAllData,
 } from '../controllers/crudController';
 import { register, login, me, updateMe } from '../controllers/authController';
 import { getDashboard } from '../controllers/dashboardController';
@@ -74,6 +74,10 @@ router.get('/users/modules', requireAuth, requireAdmin, listModules);
 router.post('/users', requireAuth, requireAdmin, createUser);
 router.put('/users/:id', requireAuth, requireAdmin, updateUser);
 router.delete('/users/:id', requireAuth, requireAdmin, deleteUser);
+
+// 資料管理（僅管理員）
+router.get('/data/summary', requireAuth, requireAdmin, getDataSummary);
+router.post('/data/wipe', requireAuth, requireAdmin, wipeAllData);
 
 // Dashboard
 router.get('/dashboard', requireAuth, getDashboard);

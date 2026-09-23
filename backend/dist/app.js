@@ -53,6 +53,10 @@ app.use((err, req, res, _next) => {
             return;
         }
     }
+    if (err instanceof client_1.Prisma.PrismaClientUnknownRequestError && /violates (RESTRICT|foreign key)/.test(err.message)) {
+        res.status(409).json({ error: '這筆資料仍被其他資料使用，無法刪除' });
+        return;
+    }
     res.status(500).json({ error: '伺服器發生錯誤，請稍後再試' });
 });
 const PORT = Number(process.env.PORT ?? 3001);
