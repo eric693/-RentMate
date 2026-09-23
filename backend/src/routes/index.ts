@@ -1,6 +1,19 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { requireTenant } from '../middleware/tenantAuth';
+import {
+  getPrepaidOverview, getPrepaidCandidates, updatePrepaidConfig,
+  postTopUp, postUsage, postAdjust, getPrepaidRecords, triggerPrepaidCheck,
+} from '../controllers/prepaidController';
+import {
+  getNotificationRules, updateNotificationRule, triggerNotificationRule,
+} from '../controllers/notificationRuleController';
+import {
+  getContractDocument, updateContractDocument, resetContractDocument,
+  sendContractDocument, previewDocument, getDocumentByToken,
+  getTemplates, createTemplate, deleteTemplate,
+} from '../controllers/contractDocumentController';
+import { getTodayRentAlerts, getRentUtilityStats } from '../controllers/rentAlertController';
 import { register, login, me } from '../controllers/authController';
 import { getDashboard } from '../controllers/dashboardController';
 import { getProperties, createProperty, updateProperty, deleteProperty } from '../controllers/propertyController';
@@ -106,6 +119,10 @@ router.put('/rent-records/:id/confirm', requireAuth, confirmPayment);
 router.post('/rent-records/mark-overdue', requireAuth, markOverdue);
 router.post('/rent-records/:id/remind', requireAuth, sendReminder);
 
+// 收租鈴聲 / 房租與電費統計
+router.get('/rent-alerts/today', requireAuth, getTodayRentAlerts);
+router.get('/stats/rent-electricity', requireAuth, getRentUtilityStats);
+
 // Maintenance
 router.get('/maintenance', requireAuth, getMaintenanceRequests);
 router.post('/maintenance', requireAuth, createMaintenanceRequest);
@@ -163,6 +180,32 @@ router.post('/payments/simulate', requireAuth, simulatePayment);
 router.get('/contracts/:contractId/virtual-account', requireAuth, getContractVirtualAccount);
 // Webhook（對外，無 JWT）
 router.post('/payments/webhook/:provider', paymentWebhook);
+
+// 租約書內容編輯與傳送
+router.get('/contracts/:id/document', requireAuth, getContractDocument);
+router.put('/contracts/:id/document', requireAuth, updateContractDocument);
+router.post('/contracts/:id/document/reset', requireAuth, resetContractDocument);
+router.post('/contracts/:id/document/preview', requireAuth, previewDocument);
+router.post('/contracts/:id/document/send', requireAuth, sendContractDocument);
+router.get('/contract-templates', requireAuth, getTemplates);
+router.post('/contract-templates', requireAuth, createTemplate);
+router.delete('/contract-templates/:templateId', requireAuth, deleteTemplate);
+router.get('/contracts/sign/:token/document', getDocumentByToken);
+
+// 預付電表（儲值制電費）
+router.get('/prepaid', requireAuth, getPrepaidOverview);
+router.get('/prepaid/candidates', requireAuth, getPrepaidCandidates);
+router.post('/prepaid/check', requireAuth, triggerPrepaidCheck);
+router.put('/prepaid/:unitId/config', requireAuth, updatePrepaidConfig);
+router.get('/prepaid/:unitId/records', requireAuth, getPrepaidRecords);
+router.post('/prepaid/:unitId/topup', requireAuth, postTopUp);
+router.post('/prepaid/:unitId/usage', requireAuth, postUsage);
+router.post('/prepaid/:unitId/adjust', requireAuth, postAdjust);
+
+// 通知排程規則（每種通知各自的執行時間與參數）
+router.get('/notification-rules', requireAuth, getNotificationRules);
+router.put('/notification-rules/:kind', requireAuth, updateNotificationRule);
+router.post('/notification-rules/:kind/trigger', requireAuth, triggerNotificationRule);
 
 // LINE
 router.post('/line/webhook', webhook);

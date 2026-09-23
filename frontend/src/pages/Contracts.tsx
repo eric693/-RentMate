@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { X, Plus, Search, AlertTriangle, Calendar, User, Home, FileSignature, CheckCircle2, Send, Copy, Check, Wallet, ShieldCheck, ClipboardCheck } from 'lucide-react';
+import { X, Plus, Search, AlertTriangle, Calendar, User, Home, FileSignature, CheckCircle2, Send, Copy, Check, Wallet, ShieldCheck, ClipboardCheck, FileText } from 'lucide-react';
 import api from '../api/client';
 import { Contract, Property, Tenant, Unit } from '../types';
 import DepositRefundModal from '../components/DepositRefundModal';
 import ComplianceModal from '../components/ComplianceModal';
 import HandoverModal from '../components/HandoverModal';
+import ContractDocumentModal from '../components/ContractDocumentModal';
+import HowTo from '../components/HowTo';
 
 type FilterType = 'all' | 'active' | 'expiring' | 'expired' | 'terminated';
 
@@ -22,6 +24,7 @@ export default function Contracts() {
   const [depositModal, setDepositModal] = useState<Contract | null>(null);
   const [complianceModal, setComplianceModal] = useState<Contract | null>(null);
   const [handoverModal, setHandoverModal] = useState<Contract | null>(null);
+  const [documentModal, setDocumentModal] = useState<Contract | null>(null);
 
   useEffect(() => { fetchAll(); }, []);
 
@@ -114,6 +117,8 @@ export default function Contracts() {
           <Plus className="w-4 h-4" />新增合約
         </button>
       </div>
+
+      <HowTo module="contracts" />
 
       {/* Expiring alerts */}
       {counts.expiring > 0 && (
@@ -263,6 +268,12 @@ export default function Contracts() {
                       </button>
                     )}
                     <button
+                      onClick={() => setDocumentModal(c)}
+                      className="text-xs px-3 py-1.5 border border-brand/30 rounded-lg text-brand hover:bg-brand/5 transition-colors flex items-center gap-1"
+                    >
+                      <FileText className="w-3 h-3" />租約書
+                    </button>
+                    <button
                       onClick={() => setHandoverModal(c)}
                       className="text-xs px-3 py-1.5 border border-brand/30 rounded-lg text-brand hover:bg-brand/5 transition-colors flex items-center gap-1"
                     >
@@ -348,6 +359,10 @@ export default function Contracts() {
 
       {complianceModal && (
         <ComplianceModal contract={complianceModal} onClose={() => setComplianceModal(null)} />
+      )}
+
+      {documentModal && (
+        <ContractDocumentModal contract={documentModal} onClose={() => setDocumentModal(null)} />
       )}
 
       {handoverModal && (

@@ -19,6 +19,8 @@ model User {
   tenants          Tenant[]
   lineBinding      LineBinding?
   reminderSetting  ReminderSetting?
+  notificationRules NotificationRule[]
+  contractTemplates ContractTemplate[]
 }
 
 model Property {
@@ -50,12 +52,19 @@ model Unit {
   description String?
   createdAt   DateTime   @default(now())
 
+  // 預付電表（儲值制）。prepaidEnabled=false 時整組欄位不參與任何計算與告警。
+  prepaidEnabled   Boolean   @default(false)
+  prepaidBalance   Decimal   @default(0) @db.Decimal(10, 2) // 目前餘額（元）
+  prepaidUnitPrice Decimal?  @db.Decimal(6, 2)              // 每度電價，登錄度數時換算金額用
+  prepaidLowAlertedAt DateTime?                             // 上次發出低餘額告警的時間，儲值回門檻以上會清空
+
   property            Property             @relation(fields: [propertyId], references: [id])
   contracts           Contract[]
   maintenanceRequests MaintenanceRequest[]
   expenses            Expense[]
   listings            ListingRecord[]
   utilityAllocations  UtilityAllocation[]
+  prepaidRecords      PrepaidRecord[]
 }
 
 enum UnitStatus {
@@ -104,6 +113,11 @@ model Contract {
   // 合規檢查結果（內政部定型化契約應記載/不得記載事項）
   complianceResult    Json?
   complianceCheckedAt DateTime?
+
+  // 租約書全文。可用 {{變數}} 佔位，顯示與傳送時才代入實際值。
+  documentBody      String?   @db.Text
+  documentUpdatedAt DateTime?
+  documentSentAt    DateTime?
 
   unit           Unit            @relation(fields: [unitId], references: [id])
   tenant         Tenant          @relation(fields: [tenantId], references: [id])
@@ -406,4 +420,80 @@ model TenantCreditSnapshot {
   computedAt   DateTime @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+
+// ── 預付電表流水帳 ────────────────────────────────────────────────
+// 每筆儲值／用電／調整都留一筆，balanceAfter 存當下餘額，供對帳與用量預估。
+
+enum PrepaidRecordType {
+  TOPUP  // 儲值
+  USAGE  // 用電扣款
+  ADJUST // 人工調整
+}
+
+model PrepaidRecord {
+  id           String            @id @default(cuid())
+  unitId       String
+  type         PrepaidRecordType
+  amount       Decimal           @db.Decimal(10, 2) // 金額（正數；USAGE 代表扣掉多少）
+  kwh          Decimal?          @db.Decimal(10, 2) // 度數，登錄用電時可填
+  balanceAfter Decimal           @db.Decimal(10, 2)
+  note         String?
+  createdAt    DateTime          @default(now())
+
+  unit Unit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@index([unitId, createdAt])
+}
+
+// ── 通知排程規則 ──────────────────────────────────────────────────
+// 每個房東 × 每種通知一列，執行時間與參數各自獨立。
+// 排程器每分鐘掃一次，比對 hour/minute 與 lastRunAt 判斷該不該跑。
+
+enum NotificationKind {
+  RENT_GENERATE   // 每月產生租金單
+  RENT_DUE        // 租金到期前／當天提醒（租客）
+  RENT_OVERDUE    // 逾期催繳（租客）
+  OVERDUE_DIGEST  // 逾期彙整（房東）
+  CONTRACT_EXPIRY // 合約到期提醒（房東＋租客）
+  PREPAID_LOW     // 預付電費餘額不足告警
+}
+
+model NotificationRule {
+  id           String           @id @default(cuid())
+  userId       String
+  kind         NotificationKind
+  enabled      Boolean          @default(true)
+  hour         Int              @default(9)  // 執行時間（台北時間）
+  minute       Int              @default(0)
+  daysBefore   Int[]            @default([]) // 提前幾天，可多個（合約到期用 30/14/7）
+  intervalDays Int?                          // 重發間隔（逾期催繳用）
+  dayOfMonth   Int?                          // 每月第幾日執行（產生租金單用）
+  threshold    Decimal?         @db.Decimal(10, 2) // 門檻金額（預付電費餘額用）
+  remindOnDue  Boolean          @default(true)     // 是否在到期當天也發
+  lastRunAt    DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, kind])
+  @@index([enabled, hour, minute])
+}
+
+
+// 可重複套用的租約書範本。範本內容同樣支援 {{變數}} 佔位。
+model ContractTemplate {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  body      String   @db.Text
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

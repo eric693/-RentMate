@@ -11,7 +11,7 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const client_1 = require("@prisma/client");
 const index_1 = __importDefault(require("./routes/index"));
-const reminderCron_1 = require("./jobs/reminderCron");
+const notificationScheduler_1 = require("./services/notificationScheduler");
 exports.prisma = new client_1.PrismaClient();
 // 上傳目錄（維修照片等）
 exports.UPLOAD_DIR = path_1.default.resolve(__dirname, '../uploads');
@@ -30,6 +30,6 @@ app.get('/health', (_req, res) => res.json({ ok: true }));
 const PORT = Number(process.env.PORT ?? 3001);
 app.listen(PORT, () => {
     console.log(`RentMate API running on http://localhost:${PORT}`);
-    (0, reminderCron_1.startReminderJobs)();
+    (0, notificationScheduler_1.startScheduler)();
 });
 exports.default = app;

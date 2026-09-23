@@ -5,7 +5,7 @@ import express from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
 import routes from './routes/index';
-import { startReminderJobs } from './jobs/reminderCron';
+import { startScheduler } from './services/notificationScheduler';
 
 export const prisma = new PrismaClient();
 
@@ -33,7 +33,7 @@ const PORT = Number(process.env.PORT ?? 3001);
 
 app.listen(PORT, () => {
   console.log(`RentMate API running on http://localhost:${PORT}`);
-  startReminderJobs();
+  startScheduler();
 });
 
 export default app;

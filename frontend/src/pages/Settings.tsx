@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Bell, MessageCircle, Users, UserPlus, Shield, X, Copy, Check, ChevronRight, RefreshCw, Send, Zap } from 'lucide-react';
+import { Bell, MessageCircle, Users, UserPlus, Shield, X, Copy, Check, ChevronRight, RefreshCw, Send, Zap, Clock } from 'lucide-react';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import HowTo from '../components/HowTo';
 
 type SettingsTab = 'account' | 'team' | 'notifications';
 
@@ -85,6 +86,8 @@ export default function Settings() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold text-gray-800">設定</h1>
       </div>
+
+      <HowTo module="settings" />
 
       {/* Tab navigation */}
       <div className="flex gap-1 bg-white rounded-xl p-1 mb-6 shadow-sm border border-gray-100">
@@ -391,41 +394,80 @@ function TeamMembersTab({ user, tenantCount }: { user: any; tenantCount: number 
   );
 }
 
+const KIND_DESC: Record<string, { desc: string; audience: string }> = {
+  RENT_GENERATE:   { desc: '依進行中的合約產生當月租金單', audience: '不發通知' },
+  RENT_DUE:        { desc: '租金到期前與到期當天提醒', audience: '租客' },
+  RENT_OVERDUE:    { desc: '標記逾期並持續催繳', audience: '租客' },
+  OVERDUE_DIGEST:  { desc: '把所有逾期房間彙整成一則', audience: '房東' },
+  CONTRACT_EXPIRY: { desc: '合約到期前提醒續約', audience: '房東 + 租客' },
+  PREPAID_LOW:     { desc: '預付電表餘額低於門檻時告警', audience: '房東 + 租客' },
+};
+
+interface Rule {
+  kind: string;
+  label: string;
+  enabled: boolean;
+  hour: number;
+  minute: number;
+  daysBefore: number[];
+  intervalDays: number | null;
+  dayOfMonth: number | null;
+  threshold: number | null;
+  remindOnDue: boolean;
+  lastRunAt: string | null;
+}
+
 function NotificationsTab() {
-  const [settings, setSettings] = useState({
-    enabled: true,
-    daysBefore: 3,
-    remindOnDue: true,
-    overdueEnabled: true,
-    overdueInterval: 3,
-  });
+  const [rules, setRules] = useState<Rule[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [triggering, setTriggering] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
-    api.get('/settings/reminder').then((r) => setSettings(r.data)).catch(() => {}).finally(() => setLoading(false));
+    api.get('/notification-rules')
+      .then((r) => setRules(r.data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 3000); }
 
-  async function saveSettings() {
-    setSaving(true);
-    try {
-      await api.put('/settings/reminder', settings);
-      showToast('設定已儲存');
-    } catch { showToast('儲存失敗，請稍後再試'); }
-    setSaving(false);
+  function patch(kind: string, changes: Partial<Rule>) {
+    setRules((rs) => rs.map((r) => (r.kind === kind ? { ...r, ...changes } : r)));
   }
 
-  async function triggerNow() {
-    setTriggering(true);
+  async function save(kind: string) {
+    const rule = rules.find((r) => r.kind === kind);
+    if (!rule) return;
+    setBusy(kind);
     try {
-      const r = await api.post('/settings/reminder/trigger');
-      showToast(r.data.message);
-    } catch { showToast('發送失敗，請稍後再試'); }
-    setTriggering(false);
+      const { data } = await api.put(`/notification-rules/${kind}`, {
+        enabled: rule.enabled,
+        hour: rule.hour,
+        minute: rule.minute,
+        daysBefore: rule.daysBefore,
+        intervalDays: rule.intervalDays,
+        dayOfMonth: rule.dayOfMonth,
+        threshold: rule.threshold,
+        remindOnDue: rule.remindOnDue,
+      });
+      patch(kind, data);
+      showToast(`「${rule.label}」已儲存`);
+    } catch (e: any) {
+      showToast(e?.response?.data?.error ?? '儲存失敗，請稍後再試');
+    }
+    setBusy(null);
+  }
+
+  async function trigger(kind: string) {
+    setBusy(kind + ':run');
+    try {
+      const { data } = await api.post(`/notification-rules/${kind}/trigger`);
+      showToast(data.message);
+    } catch (e: any) {
+      showToast(e?.response?.data?.error ?? '執行失敗，請稍後再試');
+    }
+    setBusy(null);
   }
 
   function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
@@ -439,137 +481,196 @@ function NotificationsTab() {
     );
   }
 
+  if (loading) return <div className="text-center py-10 text-gray-400 text-sm">載入中...</div>;
+
   return (
     <div className="space-y-4">
       {toast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-gray-800 text-white text-sm px-4 py-2 rounded-xl shadow-lg">{toast}</div>
       )}
 
-      {/* Smart reminder config */}
-      <div className="card">
-        <div className="flex items-start gap-3 mb-5">
-          <div className="w-10 h-10 bg-brand/10 rounded-xl flex items-center justify-center flex-shrink-0">
-            <Zap className="w-5 h-5 text-brand" />
-          </div>
-          <div className="flex-1">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-gray-700">智慧催繳設定</h2>
-              <Toggle value={settings.enabled} onChange={(v) => setSettings(s => ({ ...s, enabled: v }))} />
-            </div>
-            <p className="text-xs text-gray-400 mt-0.5">每日 09:00 自動掃描，依設定傳 LINE 提醒給租客</p>
-          </div>
+      <div className="card bg-brand/5 border-brand/20">
+        <div className="flex items-center gap-2 mb-1">
+          <Bell className="w-4 h-4 text-brand" />
+          <span className="text-sm font-semibold text-brand">排程通知</span>
         </div>
+        <p className="text-xs text-gray-600 leading-relaxed">
+          每種通知的執行時間與參數都可以獨立調整（台北時間），改完按該區塊的「儲存」即生效，
+          不必重啟系統。租客須先完成 LINE 綁定才收得到。
+        </p>
+      </div>
 
-        {loading ? (
-          <div className="text-center py-4 text-gray-400 text-sm">載入中...</div>
-        ) : (
-          <div className={`space-y-4 ${!settings.enabled ? 'opacity-40 pointer-events-none' : ''}`}>
-            {/* Before due */}
-            <div className="border border-gray-100 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <div className="text-sm font-medium text-gray-700">到期前提醒</div>
-                  <div className="text-xs text-gray-400">租金到期前幾天傳提醒給租客</div>
+      {rules.map((rule) => {
+        const meta = KIND_DESC[rule.kind] ?? { desc: '', audience: '' };
+        const isMonthly = rule.kind === 'RENT_GENERATE';
+        return (
+          <div key={rule.kind} className="card">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-semibold text-gray-700 text-sm">{rule.label}</h3>
+                  <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{meta.audience}</span>
                 </div>
+                <p className="text-xs text-gray-400 mt-0.5">{meta.desc}</p>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-500">到期前</span>
+              <Toggle value={rule.enabled} onChange={(v) => patch(rule.kind, { enabled: v })} />
+            </div>
+
+            <div className={`space-y-3 ${!rule.enabled ? 'opacity-40 pointer-events-none' : ''}`}>
+              {/* 執行時間 */}
+              <div className="flex items-center gap-2 flex-wrap border border-gray-100 rounded-xl p-3">
+                <Clock className="w-4 h-4 text-gray-400" />
+                <span className="text-sm text-gray-500">{isMonthly ? '每月' : '每天'}</span>
+                {isMonthly && (
+                  <>
+                    <select
+                      value={rule.dayOfMonth ?? 1}
+                      onChange={(e) => patch(rule.kind, { dayOfMonth: Number(e.target.value) })}
+                      className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-brand"
+                    >
+                      {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                        <option key={d} value={d}>{d} 日</option>
+                      ))}
+                    </select>
+                  </>
+                )}
                 <select
-                  value={settings.daysBefore}
-                  onChange={(e) => setSettings(s => ({ ...s, daysBefore: Number(e.target.value) }))}
+                  value={rule.hour}
+                  onChange={(e) => patch(rule.kind, { hour: Number(e.target.value) })}
                   className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-brand"
                 >
-                  {[1, 2, 3, 5, 7, 10, 14].map((d) => (
-                    <option key={d} value={d}>{d} 天</option>
+                  {Array.from({ length: 24 }, (_, i) => i).map((h) => (
+                    <option key={h} value={h}>{String(h).padStart(2, '0')} 時</option>
                   ))}
                 </select>
-                <span className="text-sm text-gray-500">發送提醒</span>
+                <select
+                  value={rule.minute}
+                  onChange={(e) => patch(rule.kind, { minute: Number(e.target.value) })}
+                  className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-brand"
+                >
+                  {[0, 10, 15, 20, 30, 40, 45, 50].map((m) => (
+                    <option key={m} value={m}>{String(m).padStart(2, '0')} 分</option>
+                  ))}
+                </select>
+                <span className="text-sm text-gray-400">執行</span>
               </div>
-            </div>
 
-            {/* On due */}
-            <div className="border border-gray-100 rounded-xl p-4 flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-gray-700">當天到期提醒</div>
-                <div className="text-xs text-gray-400">到期當天再發一次催繳通知</div>
-              </div>
-              <Toggle value={settings.remindOnDue} onChange={(v) => setSettings(s => ({ ...s, remindOnDue: v }))} />
-            </div>
+              {/* 到期前幾天（單選） */}
+              {rule.kind === 'RENT_DUE' && (
+                <>
+                  <div className="flex items-center gap-2 border border-gray-100 rounded-xl p-3">
+                    <span className="text-sm text-gray-500">到期前</span>
+                    <select
+                      value={rule.daysBefore[0] ?? 3}
+                      onChange={(e) => patch(rule.kind, { daysBefore: [Number(e.target.value)] })}
+                      className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-brand"
+                    >
+                      {[1, 2, 3, 5, 7, 10, 14].map((d) => <option key={d} value={d}>{d} 天</option>)}
+                    </select>
+                    <span className="text-sm text-gray-500">發送提醒</span>
+                  </div>
+                  <div className="flex items-center justify-between border border-gray-100 rounded-xl p-3">
+                    <div>
+                      <div className="text-sm font-medium text-gray-700">到期當天再提醒一次</div>
+                      <div className="text-xs text-gray-400">到期當天早上再發一則</div>
+                    </div>
+                    <Toggle value={rule.remindOnDue} onChange={(v) => patch(rule.kind, { remindOnDue: v })} />
+                  </div>
+                </>
+              )}
 
-            {/* Overdue */}
-            <div className="border border-gray-100 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <div className="text-sm font-medium text-gray-700">逾期催繳</div>
-                  <div className="text-xs text-gray-400">逾期後持續發送催繳提醒</div>
-                </div>
-                <Toggle value={settings.overdueEnabled} onChange={(v) => setSettings(s => ({ ...s, overdueEnabled: v }))} />
-              </div>
-              {settings.overdueEnabled && (
-                <div className="flex items-center gap-2 mt-2">
+              {/* 逾期重發間隔 */}
+              {rule.kind === 'RENT_OVERDUE' && (
+                <div className="flex items-center gap-2 border border-gray-100 rounded-xl p-3">
                   <span className="text-sm text-gray-500">逾期後每</span>
                   <select
-                    value={settings.overdueInterval}
-                    onChange={(e) => setSettings(s => ({ ...s, overdueInterval: Number(e.target.value) }))}
+                    value={rule.intervalDays ?? 3}
+                    onChange={(e) => patch(rule.kind, { intervalDays: Number(e.target.value) })}
                     className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-brand"
                   >
-                    {[1, 2, 3, 5, 7].map((d) => (
-                      <option key={d} value={d}>{d} 天</option>
-                    ))}
+                    {[1, 2, 3, 5, 7].map((d) => <option key={d} value={d}>{d} 天</option>)}
                   </select>
-                  <span className="text-sm text-gray-500">重送一次（逾期第1天必發）</span>
+                  <span className="text-sm text-gray-500">重送一次（逾期第 1 天必發）</span>
                 </div>
               )}
-            </div>
 
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={triggerNow}
-                disabled={triggering}
-                className="flex items-center gap-1.5 px-4 py-2 border border-brand text-brand rounded-xl text-sm font-medium hover:bg-brand/5 transition-colors disabled:opacity-50"
-              >
-                {triggering ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                立即發送提醒
-              </button>
-              <button
-                onClick={saveSettings}
-                disabled={saving}
-                className="flex-1 btn-primary text-sm flex items-center justify-center gap-1.5 disabled:opacity-50"
-              >
-                {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                儲存設定
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+              {/* 合約到期：多個提前天數 */}
+              {rule.kind === 'CONTRACT_EXPIRY' && (
+                <div className="border border-gray-100 rounded-xl p-3">
+                  <div className="text-sm text-gray-500 mb-2">在到期前這些天數各發一次</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[60, 45, 30, 21, 14, 7, 3, 1].map((d) => {
+                      const on = rule.daysBefore.includes(d);
+                      return (
+                        <button
+                          key={d}
+                          onClick={() =>
+                            patch(rule.kind, {
+                              daysBefore: on
+                                ? rule.daysBefore.filter((x) => x !== d)
+                                : [...rule.daysBefore, d].sort((a, b) => b - a),
+                            })
+                          }
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                            on ? 'bg-brand text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                          }`}
+                        >
+                          {d} 天
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-orange-500 mt-2">
+                    走到最小的那個天數時，合約會自動轉為「已到期」、房間轉為「空房」。
+                  </p>
+                </div>
+              )}
 
-      {/* Other notification toggles */}
-      <div className="card">
-        <div className="flex items-start gap-3 mb-4">
-          <div className="w-10 h-10 bg-brand/10 rounded-xl flex items-center justify-center flex-shrink-0">
-            <Bell className="w-5 h-5 text-brand" />
-          </div>
-          <div>
-            <h2 className="font-semibold text-gray-700">其他通知</h2>
-            <p className="text-xs text-gray-400 mt-0.5">以下為固定排程通知（不受智慧催繳設定影響）</p>
-          </div>
-        </div>
-        <div className="space-y-1">
-          {[
-            { label: '合約到期提醒', desc: '合約到期前 30、14、7 天提醒房東與租客' },
-            { label: '逾期彙整通知', desc: '每日9時將逾期房間彙整後通知房東 LINE' },
-          ].map((item) => (
-            <div key={item.label} className="flex items-start justify-between py-3 border-b border-gray-50 last:border-0">
-              <div className="flex-1 mr-4">
-                <div className="text-sm font-medium text-gray-700">{item.label}</div>
-                <div className="text-xs text-gray-400 mt-0.5">{item.desc}</div>
+              {/* 預付電費門檻 */}
+              {rule.kind === 'PREPAID_LOW' && (
+                <div className="flex items-center gap-2 flex-wrap border border-gray-100 rounded-xl p-3">
+                  <span className="text-sm text-gray-500">餘額低於</span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-sm text-gray-400">NT$</span>
+                    <input
+                      type="number"
+                      value={rule.threshold ?? 300}
+                      onChange={(e) => patch(rule.kind, { threshold: Number(e.target.value) })}
+                      className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm w-24 focus:outline-none focus:border-brand"
+                    />
+                  </div>
+                  <span className="text-sm text-gray-500">時告警（同一次見底只發一次，儲值回門檻以上才重置）</span>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  onClick={() => trigger(rule.kind)}
+                  disabled={busy === rule.kind + ':run'}
+                  className="flex items-center gap-1.5 px-3 py-2 border border-brand text-brand rounded-xl text-sm font-medium hover:bg-brand/5 transition-colors disabled:opacity-50"
+                >
+                  {busy === rule.kind + ':run' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  立即執行一次
+                </button>
+                <button
+                  onClick={() => save(rule.kind)}
+                  disabled={busy === rule.kind}
+                  className="flex-1 btn-primary text-sm flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  {busy === rule.kind ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  儲存
+                </button>
               </div>
-              <span className="text-xs bg-brand/10 text-brand px-2 py-0.5 rounded-full font-medium self-center">固定啟用</span>
+
+              {rule.lastRunAt && (
+                <p className="text-xs text-gray-300">
+                  上次執行：{new Date(rule.lastRunAt).toLocaleString('zh-TW')}
+                </p>
+              )}
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
+        );
+      })}
 
       <div className="card bg-brand/5 border-brand/20">
         <div className="flex items-center gap-2 mb-2">

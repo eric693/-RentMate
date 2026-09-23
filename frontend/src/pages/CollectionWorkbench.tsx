@@ -4,6 +4,7 @@ import {
   Mail, AlertTriangle, Clock, Banknote, RefreshCw, X,
 } from 'lucide-react';
 import api from '../api/client';
+import HowTo from '../components/HowTo';
 
 type TaskStatus = 'overdue' | 'pending' | 'paid' | 'partial';
 type TaskFilter = 'all' | 'pending' | 'rent' | 'utility' | 'overdue' | 'partial' | 'paid';
@@ -219,6 +220,10 @@ export default function CollectionWorkbench() {
             更新
           </button>
         </div>
+      </div>
+
+      <div className="px-6 pt-4">
+        <HowTo module="workbench" />
       </div>
 
       {/* KPI Stats */}

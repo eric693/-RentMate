@@ -4,6 +4,7 @@ import {
   Building2, MapPin, Tag, Calendar, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import api from '../api/client';
+import HowTo from '../components/HowTo';
 
 interface ListingRecord {
   id: string;
@@ -126,6 +127,8 @@ export default function Listings() {
           </p>
         </div>
       </div>
+
+      <HowTo module="listings" />
 
       {loading ? (
         <div className="text-center py-16 text-gray-400">載入中...</div>

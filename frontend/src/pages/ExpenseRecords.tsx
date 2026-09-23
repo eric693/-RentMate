@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../api/client';
 import { Expense } from '../types';
+import HowTo from '../components/HowTo';
 
 const EXPENSE_LABELS: Record<string, string> = {
   MANAGEMENT: '管理費', REPAIR: '維修費', OTHER: '其他', INSURANCE: '保險', INTERNET: '網路',
@@ -52,6 +53,8 @@ export default function ExpenseRecords() {
           <button onClick={() => setShowAdd(true)} className="btn-primary text-sm">+ 新增支出</button>
         </div>
       </div>
+
+      <HowTo module="expenses" />
 
       {/* Total */}
       <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-5 flex items-center justify-between">

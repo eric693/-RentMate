@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import api from '../api/client';
 import { RentRecord } from '../types';
+import HowTo from '../components/HowTo';
 
 export default function RentManagement() {
   const now = new Date();
@@ -80,6 +81,8 @@ export default function RentManagement() {
           </select>
         </div>
       </div>
+
+      <HowTo module="rent" />
 
       {/* Summary bar */}
       <div className="grid grid-cols-3 gap-3 mb-5">

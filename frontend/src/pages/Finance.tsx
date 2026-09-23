@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { AlertTriangle, FileSpreadsheet } from 'lucide-react';
 import api from '../api/client';
+import HowTo from '../components/HowTo';
 
 interface FinanceOverview {
   year: number;
@@ -106,6 +107,8 @@ export default function Finance() {
           </select>
         </div>
       </div>
+
+      <HowTo module="finance" />
 
       {loading || !data ? (
         <div className="flex items-center justify-center h-64 text-gray-400">載入中...</div>

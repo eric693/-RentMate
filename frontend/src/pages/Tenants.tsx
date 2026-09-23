@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { X, Plus, Search, MessageCircle, Phone, Mail, Home, CheckCircle2, History, Gauge, Users } from 'lucide-react';
 import api from '../api/client';
 import { Tenant, Property, Contract, RentRecord } from '../types';
+import HowTo from '../components/HowTo';
 
 type FilterType = 'all' | 'active' | 'no_contract' | 'line_bound';
 
@@ -91,6 +92,8 @@ export default function Tenants() {
           <Plus className="w-4 h-4" />新增租客
         </button>
       </div>
+
+      <HowTo module="tenants" />
 
       {/* Filters + Search */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">

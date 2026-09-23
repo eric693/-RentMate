@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.runDailyReminders = runDailyReminders;
 const app_1 = require("../app");
 const lineService_1 = require("./lineService");
-async function runDailyReminders() {
+async function runDailyReminders(opts = {}) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     let sent = 0;
@@ -37,7 +37,10 @@ async function runDailyReminders() {
         })),
         ...defaultUsers,
     ];
-    for (const setting of allSettings) {
+    const scoped = allSettings
+        .filter((s) => !opts.userId || s.userId === opts.userId)
+        .map((s) => ({ ...s, ...opts.override }));
+    for (const setting of scoped) {
         // Fetch all PENDING/OVERDUE rent records for this user
         const records = await app_1.prisma.rentRecord.findMany({
             where: {
@@ -68,7 +71,7 @@ async function runDailyReminders() {
             const propName = record.contract.unit.property.name;
             const sentKeys = new Set(record.reminderLogs.map((l) => l.triggerKey));
             // Before-due reminder
-            if (daysUntilDue === setting.daysBefore) {
+            if (opts.only !== 'OVERDUE' && daysUntilDue === setting.daysBefore) {
                 const key = `before_${setting.daysBefore}d`;
                 if (!sentKeys.has(key)) {
                     const text = `📅 繳租提醒\n\n您好 ${tenant.name}，\n${propName} ${unitNum} 的租金將於 ${setting.daysBefore} 天後（${dueDate.toLocaleDateString('zh-TW')}）到期。\n\n💰 應繳金額：NT$${Number(record.amount).toLocaleString()}\n\n請記得準時繳納，謝謝！`;
@@ -82,7 +85,7 @@ async function runDailyReminders() {
                 }
             }
             // On-due reminder
-            if (daysUntilDue === 0 && setting.remindOnDue) {
+            if (opts.only !== 'OVERDUE' && daysUntilDue === 0 && setting.remindOnDue) {
                 const key = 'on_due';
                 if (!sentKeys.has(key)) {
                     const text = `🔔 今日繳租提醒\n\n您好 ${tenant.name}，\n${propName} ${unitNum} 的租金今天（${dueDate.toLocaleDateString('zh-TW')}）到期！\n\n💰 應繳金額：NT$${Number(record.amount).toLocaleString()}\n\n請盡快完成繳納，感謝配合！`;
@@ -96,7 +99,7 @@ async function runDailyReminders() {
                 }
             }
             // Overdue reminders (send every overdueInterval days)
-            if (record.status === 'OVERDUE' && setting.overdueEnabled && daysUntilDue < 0) {
+            if (opts.only !== 'DUE' && record.status === 'OVERDUE' && setting.overdueEnabled && daysUntilDue < 0) {
                 const daysOverdue = Math.abs(daysUntilDue);
                 // Send on day 1, then every overdueInterval days
                 const shouldSend = daysOverdue === 1 || daysOverdue % setting.overdueInterval === 0;

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Sparkles, Link2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import api from '../api/client';
+import HowTo from '../components/HowTo';
 
 interface Payment {
   id: string;
@@ -74,6 +75,8 @@ export default function Reconciliation() {
         <h1 className="text-xl font-bold text-gray-800">對帳中心</h1>
         <p className="text-xs text-gray-400 mt-0.5">自動比對付款人、金額與期數，一鍵銷帳</p>
       </div>
+
+      <HowTo module="reconcile" />
 
       {loading ? (
         <div className="text-center py-12 text-gray-400">載入中...</div>

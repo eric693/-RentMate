@@ -1,0 +1,23 @@
+{
+  "name": "RentMate 微租 — 租屋管理平台",
+  "short_name": "RentMate",
+  "description": "收租、水電分攤、預付電費與合約到期通知的房東管理平台",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#faf7f2",
+  "theme_color": "#4a6741",
+  "lang": "zh-TW",
+  "categories": ["business", "finance", "productivity"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "收款工作台", "short_name": "收款", "url": "/finance/workbench", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "預付電費", "short_name": "電費", "url": "/finance/prepaid", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "報修管理", "short_name": "報修", "url": "/maintenance", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

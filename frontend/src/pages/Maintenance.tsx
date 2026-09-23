@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { X, Plus, Sparkles, Scale } from 'lucide-react';
 import api from '../api/client';
 import { MaintenanceRequest, Property } from '../types';
+import HowTo from '../components/HowTo';
 
 type StatusFilter = 'ALL' | 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
 
@@ -80,6 +81,8 @@ export default function Maintenance() {
         <h1 className="text-xl font-bold text-gray-800">報修管理</h1>
         <button onClick={() => setShowAdd(true)} className="btn-primary text-sm flex items-center gap-1"><Plus className="w-4 h-4" />新增報修</button>
       </div>
+
+      <HowTo module="maintenance" />
 
       {/* Filter Tabs */}
       <div className="grid grid-cols-4 gap-1 bg-white rounded-xl p-1 mb-4 shadow-sm">

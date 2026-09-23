@@ -3,6 +3,7 @@ import { X, Plus, Building2, Home, TrendingUp, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { Property, Unit, Tenant, Contract } from '../types';
+import HowTo from '../components/HowTo';
 
 export default function Properties() {
   const [properties, setProperties] = useState<Property[]>([]);
@@ -54,6 +55,8 @@ export default function Properties() {
           <Plus className="w-4 h-4" />新增物業
         </button>
       </div>
+
+      <HowTo module="properties" />
 
       {/* Overall stats */}
       {totalUnits > 0 && (

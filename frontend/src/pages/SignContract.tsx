@@ -27,6 +27,7 @@ export default function SignContract() {
   const [agreed, setAgreed] = useState(false);
   const [signing, setSigning] = useState(false);
   const [done, setDone] = useState(false);
+  const [document, setDocument] = useState<string | null>(null);
 
   useEffect(() => {
     api.get(`/contracts/sign/${token}`)
@@ -37,6 +38,10 @@ export default function SignContract() {
       })
       .catch(() => setError('此簽署連結無效或已過期'))
       .finally(() => setLoading(false));
+    // 租約書全文；房東若還沒編過就是系統預設範本，取不到才退回下方摘要。
+    api.get(`/contracts/sign/${token}/document`)
+      .then((r) => setDocument(r.data.rendered))
+      .catch(() => {});
   }, [token]);
 
   async function handleSign() {
@@ -90,6 +95,18 @@ export default function SignContract() {
             <div>{contract?.property.name} · {contract?.unit.unitNumber}</div>
             <div>{contract?.property.address}</div>
           </div>
+
+          {/* 簽完之後仍要看得到自己簽的是什麼 */}
+          {document && (
+            <details className="mt-4 text-left">
+              <summary className="cursor-pointer text-xs text-brand font-medium flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5" />檢視已簽署的租約書全文
+              </summary>
+              <div className="mt-2 max-h-80 overflow-y-auto bg-gray-50 rounded-xl p-3 text-xs text-gray-600 leading-loose whitespace-pre-wrap">
+                {document}
+              </div>
+            </details>
+          )}
         </div>
       </div>
     );
@@ -154,9 +171,24 @@ export default function SignContract() {
           )}
         </div>
 
+        {/* 租約書全文 */}
+        {document && (
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 mb-4">
+            <h3 className="font-semibold text-gray-700 text-sm mb-3 flex items-center gap-1.5">
+              <FileText className="w-4 h-4 text-brand" />租約書全文
+            </h3>
+            <div className="max-h-96 overflow-y-auto bg-gray-50 rounded-xl p-4 text-xs text-gray-600 leading-loose whitespace-pre-wrap">
+              {document}
+            </div>
+            <p className="text-xs text-gray-400 mt-2">請向下捲動詳閱全部條款後再簽署。</p>
+          </div>
+        )}
+
         {/* Terms */}
         <div className="bg-white rounded-2xl border border-gray-100 p-5 mb-4">
-          <h3 className="font-semibold text-gray-700 text-sm mb-3">租賃條款摘要</h3>
+          <h3 className="font-semibold text-gray-700 text-sm mb-3">
+            {document ? '重點提醒' : '租賃條款摘要'}
+          </h3>
           <ul className="text-xs text-gray-500 space-y-2 list-none">
             <li className="flex gap-2"><span className="text-brand font-bold">1.</span>租客同意按月繳納租金，每月 {contract!.rentDueDay} 日前完成繳款。</li>
             <li className="flex gap-2"><span className="text-brand font-bold">2.</span>押金 NT${Number(contract!.depositAmount).toLocaleString()} 於合約結束時退還（扣除損壞費用）。</li>

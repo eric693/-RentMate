@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Plus, Droplets, Zap, Flame, Building2, Split, Send, X } from 'lucide-react';
 import api from '../api/client';
 import { Expense, Property } from '../types';
+import HowTo from '../components/HowTo';
 
 interface Allocation { unitId: string; unitNumber: string; amount: number; basis: number | null }
 interface UtilityBill {
@@ -93,6 +94,8 @@ export default function UtilityBills() {
           </button>
         </div>
       </div>
+
+      <HowTo module="utilities" />
 
       {/* Category summary */}
       <div className="grid grid-cols-3 gap-3 mb-5">

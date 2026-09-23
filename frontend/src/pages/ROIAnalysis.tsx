@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import { Building2, AlertCircle, Pencil, Check, X, TrendingUp } from 'lucide-react';
 import api from '../api/client';
+import HowTo from '../components/HowTo';
 
 interface UnitROI {
   id: string;
@@ -92,6 +93,8 @@ export default function ROIAnalysis() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6">
+        <HowTo module="roi" />
+
         {data.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 gap-3 text-gray-400">
             <Building2 className="w-12 h-12 text-gray-200" />

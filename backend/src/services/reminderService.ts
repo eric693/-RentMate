@@ -1,7 +1,23 @@
 import { prisma } from '../app';
 import { sendTenantMessage } from './lineService';
 
-export async function runDailyReminders(): Promise<{ sent: number; failed: number }> {
+export interface ReminderRunOptions {
+  /** 只跑這位房東；不給則跑全部（手動觸發用） */
+  userId?: string;
+  /** 只跑指定類型：DUE = 到期前/當天提醒，OVERDUE = 逾期催繳；不給則兩者都跑 */
+  only?: 'DUE' | 'OVERDUE';
+  /** 覆寫參數，供排程規則帶入自己的設定 */
+  override?: Partial<{
+    daysBefore: number;
+    remindOnDue: boolean;
+    overdueEnabled: boolean;
+    overdueInterval: number;
+  }>;
+}
+
+export async function runDailyReminders(
+  opts: ReminderRunOptions = {},
+): Promise<{ sent: number; failed: number }> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   let sent = 0;
@@ -39,7 +55,11 @@ export async function runDailyReminders(): Promise<{ sent: number; failed: numbe
     ...defaultUsers,
   ];
 
-  for (const setting of allSettings) {
+  const scoped = allSettings
+    .filter((s) => !opts.userId || s.userId === opts.userId)
+    .map((s) => ({ ...s, ...opts.override }));
+
+  for (const setting of scoped) {
     // Fetch all PENDING/OVERDUE rent records for this user
     const records = await prisma.rentRecord.findMany({
       where: {
@@ -73,7 +93,7 @@ export async function runDailyReminders(): Promise<{ sent: number; failed: numbe
       const sentKeys = new Set(record.reminderLogs.map((l) => l.triggerKey));
 
       // Before-due reminder
-      if (daysUntilDue === setting.daysBefore) {
+      if (opts.only !== 'OVERDUE' && daysUntilDue === setting.daysBefore) {
         const key = `before_${setting.daysBefore}d`;
         if (!sentKeys.has(key)) {
           const text = `📅 繳租提醒\n\n您好 ${tenant.name}，\n${propName} ${unitNum} 的租金將於 ${setting.daysBefore} 天後（${dueDate.toLocaleDateString('zh-TW')}）到期。\n\n💰 應繳金額：NT$${Number(record.amount).toLocaleString()}\n\n請記得準時繳納，謝謝！`;
@@ -88,7 +108,7 @@ export async function runDailyReminders(): Promise<{ sent: number; failed: numbe
       }
 
       // On-due reminder
-      if (daysUntilDue === 0 && setting.remindOnDue) {
+      if (opts.only !== 'OVERDUE' && daysUntilDue === 0 && setting.remindOnDue) {
         const key = 'on_due';
         if (!sentKeys.has(key)) {
           const text = `🔔 今日繳租提醒\n\n您好 ${tenant.name}，\n${propName} ${unitNum} 的租金今天（${dueDate.toLocaleDateString('zh-TW')}）到期！\n\n💰 應繳金額：NT$${Number(record.amount).toLocaleString()}\n\n請盡快完成繳納，感謝配合！`;
@@ -103,7 +123,7 @@ export async function runDailyReminders(): Promise<{ sent: number; failed: numbe
       }
 
       // Overdue reminders (send every overdueInterval days)
-      if (record.status === 'OVERDUE' && setting.overdueEnabled && daysUntilDue < 0) {
+      if (opts.only !== 'DUE' && record.status === 'OVERDUE' && setting.overdueEnabled && daysUntilDue < 0) {
         const daysOverdue = Math.abs(daysUntilDue);
         // Send on day 1, then every overdueInterval days
         const shouldSend = daysOverdue === 1 || daysOverdue % setting.overdueInterval === 0;

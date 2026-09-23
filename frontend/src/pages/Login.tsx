@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
@@ -68,6 +68,10 @@ export default function Login() {
             測試帳號：landlord@example.com / password123
           </p>
         </div>
+
+        <p className="text-center text-sm text-gray-400 mt-5">
+          第一次使用？<Link to="/intro" className="text-brand font-medium hover:underline">看系統介紹與操作說明</Link>
+        </p>
       </div>
     </div>
   );

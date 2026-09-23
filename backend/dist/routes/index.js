@@ -3,6 +3,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const auth_1 = require("../middleware/auth");
 const tenantAuth_1 = require("../middleware/tenantAuth");
+const prepaidController_1 = require("../controllers/prepaidController");
+const notificationRuleController_1 = require("../controllers/notificationRuleController");
+const contractDocumentController_1 = require("../controllers/contractDocumentController");
+const rentAlertController_1 = require("../controllers/rentAlertController");
 const authController_1 = require("../controllers/authController");
 const dashboardController_1 = require("../controllers/dashboardController");
 const propertyController_1 = require("../controllers/propertyController");
@@ -85,6 +89,9 @@ router.get('/rent-records', auth_1.requireAuth, rentController_1.getRentRecords)
 router.put('/rent-records/:id/confirm', auth_1.requireAuth, rentController_1.confirmPayment);
 router.post('/rent-records/mark-overdue', auth_1.requireAuth, rentController_1.markOverdue);
 router.post('/rent-records/:id/remind', auth_1.requireAuth, rentController_1.sendReminder);
+// 收租鈴聲 / 房租與電費統計
+router.get('/rent-alerts/today', auth_1.requireAuth, rentAlertController_1.getTodayRentAlerts);
+router.get('/stats/rent-electricity', auth_1.requireAuth, rentAlertController_1.getRentUtilityStats);
 // Maintenance
 router.get('/maintenance', auth_1.requireAuth, maintenanceController_1.getMaintenanceRequests);
 router.post('/maintenance', auth_1.requireAuth, maintenanceController_1.createMaintenanceRequest);
@@ -133,6 +140,29 @@ router.post('/payments/simulate', auth_1.requireAuth, paymentController_1.simula
 router.get('/contracts/:contractId/virtual-account', auth_1.requireAuth, paymentController_1.getContractVirtualAccount);
 // Webhook（對外，無 JWT）
 router.post('/payments/webhook/:provider', paymentController_1.paymentWebhook);
+// 租約書內容編輯與傳送
+router.get('/contracts/:id/document', auth_1.requireAuth, contractDocumentController_1.getContractDocument);
+router.put('/contracts/:id/document', auth_1.requireAuth, contractDocumentController_1.updateContractDocument);
+router.post('/contracts/:id/document/reset', auth_1.requireAuth, contractDocumentController_1.resetContractDocument);
+router.post('/contracts/:id/document/preview', auth_1.requireAuth, contractDocumentController_1.previewDocument);
+router.post('/contracts/:id/document/send', auth_1.requireAuth, contractDocumentController_1.sendContractDocument);
+router.get('/contract-templates', auth_1.requireAuth, contractDocumentController_1.getTemplates);
+router.post('/contract-templates', auth_1.requireAuth, contractDocumentController_1.createTemplate);
+router.delete('/contract-templates/:templateId', auth_1.requireAuth, contractDocumentController_1.deleteTemplate);
+router.get('/contracts/sign/:token/document', contractDocumentController_1.getDocumentByToken);
+// 預付電表（儲值制電費）
+router.get('/prepaid', auth_1.requireAuth, prepaidController_1.getPrepaidOverview);
+router.get('/prepaid/candidates', auth_1.requireAuth, prepaidController_1.getPrepaidCandidates);
+router.post('/prepaid/check', auth_1.requireAuth, prepaidController_1.triggerPrepaidCheck);
+router.put('/prepaid/:unitId/config', auth_1.requireAuth, prepaidController_1.updatePrepaidConfig);
+router.get('/prepaid/:unitId/records', auth_1.requireAuth, prepaidController_1.getPrepaidRecords);
+router.post('/prepaid/:unitId/topup', auth_1.requireAuth, prepaidController_1.postTopUp);
+router.post('/prepaid/:unitId/usage', auth_1.requireAuth, prepaidController_1.postUsage);
+router.post('/prepaid/:unitId/adjust', auth_1.requireAuth, prepaidController_1.postAdjust);
+// 通知排程規則（每種通知各自的執行時間與參數）
+router.get('/notification-rules', auth_1.requireAuth, notificationRuleController_1.getNotificationRules);
+router.put('/notification-rules/:kind', auth_1.requireAuth, notificationRuleController_1.updateNotificationRule);
+router.post('/notification-rules/:kind/trigger', auth_1.requireAuth, notificationRuleController_1.triggerNotificationRule);
 // LINE
 router.post('/line/webhook', lineController_1.webhook);
 router.get('/line/binding', auth_1.requireAuth, lineController_1.getLandlordBinding);

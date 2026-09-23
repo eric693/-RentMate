@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { TrendingUp, MapPin, Info } from 'lucide-react';
 import api from '../api/client';
 import { Property } from '../types';
+import HowTo from '../components/HowTo';
 
 interface Comp {
   district: string;
@@ -65,6 +66,8 @@ export default function RentComps() {
         <h1 className="text-xl font-bold text-gray-800">在地租金行情</h1>
         <p className="text-xs text-gray-400 mt-0.5">平台累積的匿名成交資料，越多房東使用越準確</p>
       </div>
+
+      <HowTo module="market" />
 
       {/* 定價建議 */}
       <div className="card mb-6">

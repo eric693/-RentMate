@@ -8,6 +8,7 @@ import {
 import api from '../api/client';
 import { DashboardData } from '../types';
 import CalendarModal from '../components/CalendarModal';
+import HowTo from '../components/HowTo';
 
 export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -46,6 +47,8 @@ export default function Dashboard() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6">
+        <HowTo module="dashboard" />
+
         {/* KPI Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <KpiCard

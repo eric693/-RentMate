@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Download, ShieldCheck, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import api from '../api/client';
+import HowTo from '../components/HowTo';
 
 interface Issue {
   severity: 'HIGH' | 'MEDIUM' | 'LOW';
@@ -77,6 +78,8 @@ export default function TaxReport() {
           </button>
         </div>
       </div>
+
+      <HowTo module="tax" />
 
       {/* Precheck summary */}
       {loading ? (

@@ -2,6 +2,8 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/client';
+import InstallPrompt from './InstallPrompt';
+import RentBellWatcher from './RentBellWatcher';
 import {
   Home,
   LayoutDashboard,
@@ -22,9 +24,12 @@ import {
 const FINANCE_ITEMS = [
   { to: '/finance', label: '財務總覽', exact: true },
   { to: '/finance/workbench', label: '收款工作台', exact: false },
+  { to: '/finance/bell', label: '收租鈴聲', exact: false },
+  { to: '/finance/stats', label: '房租與電費統計', exact: false },
   { to: '/finance/rent', label: '租金管理', exact: false },
   { to: '/finance/reconcile', label: '對帳中心', exact: false },
   { to: '/finance/utilities', label: '水電帳單', exact: false },
+  { to: '/finance/prepaid', label: '預付電費', exact: false },
   { to: '/finance/expenses', label: '支出記錄', exact: false },
   { to: '/finance/tax', label: '租賃報稅', exact: false },
 ];
@@ -49,6 +54,8 @@ export default function Layout() {
 
   return (
     <div className="flex h-screen bg-warm overflow-hidden">
+      <InstallPrompt />
+      <RentBellWatcher />
       {/* Sidebar */}
       <aside className="hidden md:flex flex-col w-56 bg-white border-r border-gray-100 flex-shrink-0">
         {/* Logo */}
