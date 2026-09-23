@@ -168,21 +168,28 @@ function MyAccount({ onSaved }: { onSaved: () => void }) {
   const [form, setForm] = useState({ name: user?.name ?? '', email: user?.email ?? '', currentPassword: '', newPassword: '', confirm: '' });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  // 密碼欄預設收起：iPhone Safari 會自動把「建議的高強度密碼」填進新密碼欄，
+  // 使用者沒注意就存下去，密碼就被換成自己不知道的值。要改密碼時才展開。
+  const [changePw, setChangePw] = useState(false);
+  const [showPw, setShowPw] = useState(false);
+  const pwType = showPw ? 'text' : 'password';
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
-  const needCurrent = form.email.trim().toLowerCase() !== user?.email || !!form.newPassword;
+  const needCurrent = form.email.trim().toLowerCase() !== user?.email || (changePw && !!form.newPassword);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    if (form.newPassword && form.newPassword !== form.confirm) { setError('兩次輸入的新密碼不一樣'); return; }
+    if (changePw && form.newPassword !== form.confirm) { setError('兩次輸入的新密碼不一樣'); return; }
+    if (changePw && form.newPassword.length < 6) { setError('新密碼至少 6 碼'); return; }
     setSaving(true);
     try {
       await api.put('/auth/me', {
         name: form.name, email: form.email,
         currentPassword: form.currentPassword || undefined,
-        newPassword: form.newPassword || undefined,
+        newPassword: changePw ? form.newPassword : undefined,
       });
       setForm((f) => ({ ...f, currentPassword: '', newPassword: '', confirm: '' }));
+      setChangePw(false);
       onSaved();
     } catch (err) {
       setError(errMsg(err, '儲存失敗'));
@@ -204,15 +211,36 @@ function MyAccount({ onSaved }: { onSaved: () => void }) {
         <label className="block text-xs text-gray-500">登入帳號（Email 或自訂帳號）
           <input className="input mt-1" autoCapitalize="none" value={form.email} onChange={(e) => set('email', e.target.value)} required />
         </label>
-        <label className="block text-xs text-gray-500">新密碼（不改請留空）
-          <input type="password" autoComplete="new-password" className="input mt-1" value={form.newPassword} onChange={(e) => set('newPassword', e.target.value)} />
-        </label>
-        <label className="block text-xs text-gray-500">再輸入一次新密碼
-          <input type="password" autoComplete="new-password" className="input mt-1" value={form.confirm} onChange={(e) => set('confirm', e.target.value)} />
-        </label>
+        <div className="sm:col-span-2 flex items-center gap-4 text-sm text-gray-600">
+          <label className="flex items-center gap-1.5">
+            <input
+              type="checkbox"
+              className="accent-brand"
+              checked={changePw}
+              onChange={(e) => { setChangePw(e.target.checked); setForm((f) => ({ ...f, newPassword: '', confirm: '' })); }}
+            />
+            我要修改密碼
+          </label>
+          {(changePw || needCurrent) && (
+            <label className="flex items-center gap-1.5 text-xs text-gray-500">
+              <input type="checkbox" className="accent-brand" checked={showPw} onChange={(e) => setShowPw(e.target.checked)} />
+              顯示密碼
+            </label>
+          )}
+        </div>
+        {changePw && (
+          <>
+            <label className="block text-xs text-gray-500">新密碼（至少 6 碼）
+              <input type={pwType} autoComplete="new-password" className="input mt-1" value={form.newPassword} onChange={(e) => set('newPassword', e.target.value)} required />
+            </label>
+            <label className="block text-xs text-gray-500">再輸入一次新密碼
+              <input type={pwType} autoComplete="new-password" className="input mt-1" value={form.confirm} onChange={(e) => set('confirm', e.target.value)} required />
+            </label>
+          </>
+        )}
         {needCurrent && (
           <label className="block text-xs text-gray-500 sm:col-span-2">目前密碼（修改帳號或密碼需驗證）
-            <input type="password" autoComplete="current-password" className="input mt-1" value={form.currentPassword} onChange={(e) => set('currentPassword', e.target.value)} required />
+            <input type={pwType} autoComplete="current-password" className="input mt-1" value={form.currentPassword} onChange={(e) => set('currentPassword', e.target.value)} required />
           </label>
         )}
       </div>
