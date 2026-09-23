@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 import api from '../api/client';
 import HowTo from '../components/HowTo';
+import SearchBox, { matches } from '../components/SearchBox';
 
 interface MonthRow {
   month: number;
@@ -53,6 +54,8 @@ export default function RentStats() {
   const [data, setData] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'rent' | 'electricity'>('rent');
+  const [search, setSearch] = useState('');
+  const [property, setProperty] = useState('');
 
   useEffect(() => {
     setLoading(true);
@@ -62,6 +65,8 @@ export default function RentStats() {
   }, [year]);
 
   const s = data?.summary;
+  const propertyNames = [...new Set((data?.units ?? []).map((u) => u.propertyName))];
+  const units = (data?.units ?? []).filter((u) => (!property || u.propertyName === property) && matches(search, u.propertyName, u.unitNumber));
   const chartData = (data?.months ?? []).map((m) => ({ ...m, label: `${m.month}月` }));
 
   return (
@@ -82,7 +87,7 @@ export default function RentStats() {
         <div className="text-center text-gray-400 py-16 text-sm">載入中...</div>
       ) : (
         <>
-          <div className="flex gap-1.5 mb-4">
+          <div className="flex gap-1.5 mb-4 flex-wrap items-center">
             {([['rent', '房租統計'], ['electricity', '電費統計']] as const).map(([k, label]) => (
               <button
                 key={k}
@@ -92,6 +97,11 @@ export default function RentStats() {
                 {label}
               </button>
             ))}
+            <select value={property} onChange={(e) => setProperty(e.target.value)} className="input text-xs py-1.5 px-2 w-32 ml-auto">
+              <option value="">全部物業</option>
+              {propertyNames.map((n) => <option key={n}>{n}</option>)}
+            </select>
+            <SearchBox value={search} onChange={setSearch} placeholder="搜尋房號（各房間表）" />
           </div>
 
           {tab === 'rent' ? (
@@ -130,7 +140,7 @@ export default function RentStats() {
               <Card title="各房間房租">
                 <Table
                   head={['物業', '房號', '應收', '已收', '未收', '未繳筆數']}
-                  rows={data!.units.map((u) => [
+                  rows={units.map((u) => [
                     u.propertyName, u.unitNumber, money(u.rentDue), money(u.rentCollected),
                     money(Math.max(u.rentDue - u.rentCollected, 0)), `${u.unpaidCount}`,
                   ])}
@@ -173,7 +183,7 @@ export default function RentStats() {
               <Card title="各房間電費">
                 <Table
                   head={['物業', '房號', '分攤電費', '預付扣款', '預付度數', '合計']}
-                  rows={data!.units.map((u) => [
+                  rows={units.map((u) => [
                     u.propertyName, u.unitNumber, money(u.electricityAllocated), money(u.prepaidUsage),
                     `${Math.round(u.prepaidKwh).toLocaleString()} 度`, money(u.electricityAllocated + u.prepaidUsage),
                   ])}

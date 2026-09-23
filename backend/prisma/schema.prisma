@@ -7,13 +7,26 @@ generator client {
   provider = "prisma-client-js"
 }
 
+enum UserRole {
+  ADMIN // 管理員：資料擁有者，可管理帳號
+  STAFF // 員工：共用所屬管理員的資料，只能進有權限的模組
+}
+
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  email       String   @unique // 登入帳號（可為 Email 或自訂帳號名稱）
+  password    String
+  name        String
+  role        UserRole @default(ADMIN)
+  ownerId     String?  // STAFF：所屬管理員 id；ADMIN：null
+  permissions String[] @default([]) // STAFF 可進入的模組鍵；ADMIN 不受限
+  active      Boolean  @default(true) // 停用後無法登入
+  lastLoginAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner User?  @relation("OwnerStaff", fields: [ownerId], references: [id], onDelete: Cascade)
+  staff User[] @relation("OwnerStaff")
 
   properties       Property[]
   tenants          Tenant[]

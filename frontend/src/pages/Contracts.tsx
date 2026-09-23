@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X, Plus, Search, AlertTriangle, Calendar, User, Home, FileSignature, CheckCircle2, Send, Copy, Check, Wallet, ShieldCheck, ClipboardCheck, FileText } from 'lucide-react';
+import { X, Plus, Search, AlertTriangle, Calendar, User, Home, FileSignature, CheckCircle2, Send, Copy, Check, Wallet, ShieldCheck, ClipboardCheck, FileText, Pencil, Trash2 } from 'lucide-react';
 import api from '../api/client';
 import { Contract, Property, Tenant, Unit } from '../types';
 import DepositRefundModal from '../components/DepositRefundModal';
@@ -25,6 +25,7 @@ export default function Contracts() {
   const [complianceModal, setComplianceModal] = useState<Contract | null>(null);
   const [handoverModal, setHandoverModal] = useState<Contract | null>(null);
   const [documentModal, setDocumentModal] = useState<Contract | null>(null);
+  const [editContract, setEditContract] = useState<Contract | null>(null);
 
   useEffect(() => { fetchAll(); }, []);
 
@@ -44,6 +45,12 @@ export default function Contracts() {
   async function terminate(id: string) {
     if (!confirm('確定要終止此合約？此操作無法復原。')) return;
     await api.put(`/contracts/${id}`, { status: 'TERMINATED' });
+    fetchAll();
+  }
+
+  async function removeContract(c: Contract) {
+    if (!confirm(`確定刪除 ${c.unit?.unitNumber ?? ''} ${c.tenant?.name ?? ''} 的合約？\n會一併刪除這份合約的租金單、點交與退押紀錄，無法復原。\n（正常到期或退租請用「終止合約」）`)) return;
+    await api.delete(`/contracts/${c.id}`);
     fetchAll();
   }
 
@@ -304,6 +311,21 @@ export default function Contracts() {
                   </div>
                 )}
 
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={() => setEditContract(c)}
+                    className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-1"
+                  >
+                    <Pencil className="w-3 h-3" />編輯
+                  </button>
+                  <button
+                    onClick={() => removeContract(c)}
+                    className="text-xs px-3 py-1.5 border border-red-100 rounded-lg text-red-400 hover:bg-red-50 transition-colors flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3 h-3" />刪除
+                  </button>
+                </div>
+
                 {/* Terminated/Expired: show deposit button */}
                 {(c.status === 'TERMINATED' || c.status === 'EXPIRED') && c.depositPaid && (
                   <button
@@ -349,6 +371,15 @@ export default function Contracts() {
         />
       )}
 
+      {editContract && (
+        <AddContractModal
+          contract={editContract}
+          units={[]}
+          tenants={[]}
+          onClose={() => setEditContract(null)}
+          onSaved={() => { setEditContract(null); fetchAll(); }}
+        />
+      )}
       {depositModal && (
         <DepositRefundModal
           contract={depositModal}
@@ -372,26 +403,33 @@ export default function Contracts() {
   );
 }
 
-function AddContractModal({ units, tenants, onClose, onSaved }: {
+function AddContractModal({ contract, units, tenants, onClose, onSaved }: {
+  contract?: Contract;
   units: Array<Unit & { propertyName: string }>;
   tenants: Tenant[];
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const day = (v?: string) => (v ? String(v).split('T')[0] : '');
   const [form, setForm] = useState({
-    unitId: '',
-    tenantId: '',
-    startDate: new Date().toISOString().split('T')[0],
-    endDate: '',
-    monthlyRent: '',
-    depositAmount: '',
-    rentDueDay: '5',
-    notes: '',
+    unitId: contract?.unitId ?? '',
+    tenantId: contract?.tenantId ?? '',
+    startDate: day(contract?.startDate) || new Date().toISOString().split('T')[0],
+    endDate: day(contract?.endDate),
+    monthlyRent: contract ? String(contract.monthlyRent) : '',
+    depositAmount: contract ? String(contract.depositAmount ?? '') : '',
+    rentDueDay: String(contract?.rentDueDay ?? 5),
+    notes: contract?.notes ?? '',
   });
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    await api.post('/contracts', form);
+    if (contract) {
+      const { unitId: _u, tenantId: _t, ...rest } = form;
+      await api.put(`/contracts/${contract.id}`, rest);
+    } else {
+      await api.post('/contracts', form);
+    }
     onSaved();
   }
 
@@ -401,10 +439,16 @@ function AddContractModal({ units, tenants, onClose, onSaved }: {
     <div className="fixed inset-0 bg-black/40 flex items-end md:items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl p-5 w-full max-w-sm max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-lg">新增合約</h3>
+          <h3 className="font-bold text-lg">{contract ? '編輯合約' : '新增合約'}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-3">
+          {contract ? (
+            <div className="text-sm text-gray-600 bg-warm rounded-xl px-3 py-2">
+              {contract.unit?.unitNumber}・{contract.tenant?.name}
+              <div className="text-xs text-gray-400">房間與租客建立後不可更換，需更換請終止後重新簽約</div>
+            </div>
+          ) : (<>
           <div>
             <label className="block text-sm font-medium mb-1">房間 <span className="text-red-400">*</span></label>
             <select
@@ -429,6 +473,7 @@ function AddContractModal({ units, tenants, onClose, onSaved }: {
               {tenants.map((t) => <option key={t.id} value={t.id}>{t.name} · {t.phone}</option>)}
             </select>
           </div>
+          </>)}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-sm font-medium mb-1">開始日期 <span className="text-red-400">*</span></label>
@@ -451,7 +496,7 @@ function AddContractModal({ units, tenants, onClose, onSaved }: {
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">每月繳租日</label>
-            <input type="number" min="1" max="28" className="input" value={form.rentDueDay} onChange={(e) => setForm({ ...form, rentDueDay: e.target.value })} />
+            <input type="number" min="1" max="31" className="input" value={form.rentDueDay} onChange={(e) => setForm({ ...form, rentDueDay: e.target.value })} />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">備註</label>
@@ -459,7 +504,7 @@ function AddContractModal({ units, tenants, onClose, onSaved }: {
           </div>
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose} className="btn-secondary flex-1">取消</button>
-            <button type="submit" className="btn-primary flex-1">新增合約</button>
+            <button type="submit" className="btn-primary flex-1">{contract ? '儲存' : '新增合約'}</button>
           </div>
         </form>
       </div>

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import api from '../api/client';
 import HowTo from '../components/HowTo';
+import SearchBox, { matches } from '../components/SearchBox';
 
 interface ListingRecord {
   id: string;
@@ -65,6 +66,8 @@ export default function Listings() {
   const [listingForm, setListingForm] = useState({ platform: '591', url: '', notes: '', expiresAt: '' });
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [listFilter, setListFilter] = useState<'ALL' | 'LISTED' | 'UNLISTED'>('ALL');
 
   useEffect(() => { fetchUnits(); }, []);
 
@@ -130,6 +133,23 @@ export default function Listings() {
 
       <HowTo module="listings" />
 
+      {units.length > 0 && (
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <div className="flex gap-1 bg-white rounded-xl p-1 border border-gray-100">
+            {([['ALL', '全部空房'], ['LISTED', '刊登中'], ['UNLISTED', '尚未刊登']] as const).map(([k, l]) => (
+              <button
+                key={k}
+                onClick={() => setListFilter(k)}
+                className={`px-3 py-1 rounded-lg text-xs font-medium ${listFilter === k ? 'bg-brand text-white' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+          <SearchBox value={search} onChange={setSearch} placeholder="搜尋物業、地址、房號、平台" />
+        </div>
+      )}
+
       {loading ? (
         <div className="text-center py-16 text-gray-400">載入中...</div>
       ) : units.length === 0 ? (
@@ -140,7 +160,13 @@ export default function Listings() {
         </div>
       ) : (
         <div className="space-y-4">
-          {units.map((unit) => {
+          {units
+            .filter((u) => {
+              const listed = u.listings.some((l) => l.status === 'ACTIVE');
+              return (listFilter === 'ALL' || (listFilter === 'LISTED' ? listed : !listed))
+                && matches(search, u.propertyName, u.propertyAddress, u.unitNumber, u.type, ...u.listings.map((l) => `${l.platform} ${l.notes ?? ''}`));
+            })
+            .map((unit) => {
             const isOpen = expanded === unit.id;
             const copyText_ = generateCopy(unit);
             const activeListings = unit.listings.filter((l) => l.status === 'ACTIVE');

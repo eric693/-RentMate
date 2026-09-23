@@ -2,11 +2,13 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const auth_1 = require("../middleware/auth");
+const userController_1 = require("../controllers/userController");
 const tenantAuth_1 = require("../middleware/tenantAuth");
 const prepaidController_1 = require("../controllers/prepaidController");
 const notificationRuleController_1 = require("../controllers/notificationRuleController");
 const contractDocumentController_1 = require("../controllers/contractDocumentController");
 const rentAlertController_1 = require("../controllers/rentAlertController");
+const crudController_1 = require("../controllers/crudController");
 const authController_1 = require("../controllers/authController");
 const dashboardController_1 = require("../controllers/dashboardController");
 const propertyController_1 = require("../controllers/propertyController");
@@ -40,6 +42,13 @@ const router = (0, express_1.Router)();
 router.post('/auth/register', authController_1.register);
 router.post('/auth/login', authController_1.login);
 router.get('/auth/me', auth_1.requireAuth, authController_1.me);
+router.put('/auth/me', auth_1.requireAuth, authController_1.updateMe);
+// 帳號權限管理（僅管理員）
+router.get('/users', auth_1.requireAuth, auth_1.requireAdmin, userController_1.listUsers);
+router.get('/users/modules', auth_1.requireAuth, auth_1.requireAdmin, userController_1.listModules);
+router.post('/users', auth_1.requireAuth, auth_1.requireAdmin, userController_1.createUser);
+router.put('/users/:id', auth_1.requireAuth, auth_1.requireAdmin, userController_1.updateUser);
+router.delete('/users/:id', auth_1.requireAuth, auth_1.requireAdmin, userController_1.deleteUser);
 // Dashboard
 router.get('/dashboard', auth_1.requireAuth, dashboardController_1.getDashboard);
 // Properties
@@ -62,6 +71,7 @@ router.post('/tenants/:id/line-code', auth_1.requireAuth, tenantController_1.gen
 router.get('/contracts', auth_1.requireAuth, contractController_1.getContracts);
 router.post('/contracts', auth_1.requireAuth, contractController_1.createContract);
 router.put('/contracts/:id', auth_1.requireAuth, contractController_1.updateContract);
+router.delete('/contracts/:id', auth_1.requireAuth, crudController_1.deleteContract);
 router.post('/contracts/:id/sign-invite', auth_1.requireAuth, contractController_1.generateSignInvite);
 router.post('/contracts/:id/compliance-check', auth_1.requireAuth, contractController_2.checkCompliance);
 // Handover（點交相冊）
@@ -86,22 +96,28 @@ router.put('/settings/reminder', auth_1.requireAuth, reminderController_1.update
 router.post('/settings/reminder/trigger', auth_1.requireAuth, reminderController_1.triggerReminders);
 // Rent Records
 router.get('/rent-records', auth_1.requireAuth, rentController_1.getRentRecords);
+router.post('/rent-records', auth_1.requireAuth, crudController_1.createRentRecord);
+router.put('/rent-records/:id', auth_1.requireAuth, crudController_1.updateRentRecord);
+router.delete('/rent-records/:id', auth_1.requireAuth, crudController_1.deleteRentRecord);
 router.put('/rent-records/:id/confirm', auth_1.requireAuth, rentController_1.confirmPayment);
 router.post('/rent-records/mark-overdue', auth_1.requireAuth, rentController_1.markOverdue);
 router.post('/rent-records/:id/remind', auth_1.requireAuth, rentController_1.sendReminder);
 // 收租鈴聲 / 房租與電費統計
 router.get('/rent-alerts/today', auth_1.requireAuth, rentAlertController_1.getTodayRentAlerts);
 router.get('/stats/rent-electricity', auth_1.requireAuth, rentAlertController_1.getRentUtilityStats);
+router.get('/dorm-records', auth_1.requireAuth, rentAlertController_1.getDormRecords);
 // Maintenance
 router.get('/maintenance', auth_1.requireAuth, maintenanceController_1.getMaintenanceRequests);
 router.post('/maintenance', auth_1.requireAuth, maintenanceController_1.createMaintenanceRequest);
 router.put('/maintenance/:id', auth_1.requireAuth, maintenanceController_1.updateMaintenanceRequest);
+router.delete('/maintenance/:id', auth_1.requireAuth, crudController_1.deleteMaintenanceRequest);
 router.post('/maintenance/:id/analyze', auth_1.requireAuth, maintenanceController_2.analyzeMaintenanceRequest);
 // Expenses
 router.get('/expenses', auth_1.requireAuth, expenseController_1.getExpenses);
 router.post('/expenses', auth_1.requireAuth, expenseController_1.createExpense);
 router.put('/expenses/:id/confirm', auth_1.requireAuth, expenseController_1.confirmExpense);
 router.delete('/expenses/:id', auth_1.requireAuth, expenseController_1.deleteExpense);
+router.put('/expenses/:id', auth_1.requireAuth, crudController_1.updateExpense);
 router.get('/expenses/trend', auth_1.requireAuth, expenseController_1.getExpenseTrend);
 // Calendar
 router.get('/calendar', auth_1.requireAuth, calendarController_1.getCalendarEvents);
@@ -116,6 +132,8 @@ router.get('/utility-bills', auth_1.requireAuth, utilityBillController_1.getUtil
 router.post('/utility-bills/preview', auth_1.requireAuth, utilityBillController_1.previewUtilitySplit);
 router.post('/utility-bills', auth_1.requireAuth, utilityBillController_1.createUtilityBill);
 router.post('/utility-bills/:id/bill', auth_1.requireAuth, utilityBillController_1.billUtilityToTenants);
+router.put('/utility-bills/:id', auth_1.requireAuth, crudController_1.updateUtilityBill);
+router.delete('/utility-bills/:id', auth_1.requireAuth, crudController_1.deleteUtilityBill);
 // Rent comps（在地租金行情）
 router.get('/rent-comps', auth_1.requireAuth, rentCompsController_1.getRentComps);
 router.get('/units/:unitId/pricing', auth_1.requireAuth, rentCompsController_1.getUnitPricing);
@@ -136,6 +154,7 @@ router.get('/payments', auth_1.requireAuth, paymentController_1.getPayments);
 router.get('/payments/unmatched', auth_1.requireAuth, paymentController_1.getUnmatchedPayments);
 router.get('/payments/:id/suggestions', auth_1.requireAuth, paymentController_1.getMatchSuggestions);
 router.post('/payments/:id/match', auth_1.requireAuth, paymentController_1.matchPayment);
+router.delete('/payments/:id', auth_1.requireAuth, crudController_1.deletePayment);
 router.post('/payments/simulate', auth_1.requireAuth, paymentController_1.simulatePayment);
 router.get('/contracts/:contractId/virtual-account', auth_1.requireAuth, paymentController_1.getContractVirtualAccount);
 // Webhook（對外，無 JWT）
@@ -149,6 +168,7 @@ router.post('/contracts/:id/document/send', auth_1.requireAuth, contractDocument
 router.get('/contract-templates', auth_1.requireAuth, contractDocumentController_1.getTemplates);
 router.post('/contract-templates', auth_1.requireAuth, contractDocumentController_1.createTemplate);
 router.delete('/contract-templates/:templateId', auth_1.requireAuth, contractDocumentController_1.deleteTemplate);
+router.put('/contract-templates/:templateId', auth_1.requireAuth, crudController_1.updateContractTemplate);
 router.get('/contracts/sign/:token/document', contractDocumentController_1.getDocumentByToken);
 // 預付電表（儲值制電費）
 router.get('/prepaid', auth_1.requireAuth, prepaidController_1.getPrepaidOverview);
@@ -159,6 +179,8 @@ router.get('/prepaid/:unitId/records', auth_1.requireAuth, prepaidController_1.g
 router.post('/prepaid/:unitId/topup', auth_1.requireAuth, prepaidController_1.postTopUp);
 router.post('/prepaid/:unitId/usage', auth_1.requireAuth, prepaidController_1.postUsage);
 router.post('/prepaid/:unitId/adjust', auth_1.requireAuth, prepaidController_1.postAdjust);
+router.put('/prepaid-records/:id', auth_1.requireAuth, crudController_1.updatePrepaidRecord);
+router.delete('/prepaid-records/:id', auth_1.requireAuth, crudController_1.deletePrepaidRecord);
 // 通知排程規則（每種通知各自的執行時間與參數）
 router.get('/notification-rules', auth_1.requireAuth, notificationRuleController_1.getNotificationRules);
 router.put('/notification-rules/:kind', auth_1.requireAuth, notificationRuleController_1.updateNotificationRule);

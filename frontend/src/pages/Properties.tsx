@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { Property, Unit, Tenant, Contract } from '../types';
 import HowTo from '../components/HowTo';
+import SearchBox, { matches } from '../components/SearchBox';
 
 export default function Properties() {
   const [properties, setProperties] = useState<Property[]>([]);
@@ -12,6 +13,9 @@ export default function Properties() {
   const [showAddProperty, setShowAddProperty] = useState(false);
   const [showAddUnit, setShowAddUnit] = useState(false);
   const [editUnit, setEditUnit] = useState<Unit | null>(null);
+  const [editProperty, setEditProperty] = useState<Property | null>(null);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'VACANT' | 'OCCUPIED'>('ALL');
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -37,6 +41,18 @@ export default function Properties() {
     setSelectedProperty(null);
     fetchAll();
   }
+
+  // 搜尋：物業名／地址命中則整棟顯示；否則只留房號、類型或租客符合的房間
+  const tenantOf = (unitId: string) => contracts.find((c) => c.unitId === unitId && c.status === 'ACTIVE')?.tenant;
+  const shownProperties = properties
+    .map((p) => {
+      const propHit = matches(search, p.name, p.address);
+      const units = p.units.filter((u) =>
+        (statusFilter === 'ALL' || u.status === statusFilter)
+        && (propHit || matches(search, u.unitNumber, u.type, tenantOf(u.id)?.name, tenantOf(u.id)?.phone)));
+      return { ...p, units };
+    })
+    .filter((p) => p.units.length > 0 || (statusFilter === 'ALL' && matches(search, p.name, p.address)));
 
   const units = selectedProperty?.units ?? [];
   const totalUnits = properties.reduce((s, p) => s + p.units.length, 0);
@@ -98,8 +114,27 @@ export default function Properties() {
         </button>
       </div>
 
+      {properties.length > 0 && (
+        <div className="flex items-center gap-3 mb-4 flex-wrap">
+          <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm border border-gray-100">
+            {([['ALL', '全部房間'], ['VACANT', '空房'], ['OCCUPIED', '已出租']] as const).map(([k, l]) => (
+              <button
+                key={k}
+                onClick={() => setStatusFilter(k)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${statusFilter === k ? 'bg-brand text-white' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+          <SearchBox value={search} onChange={setSearch} placeholder="搜尋物業、地址、房號、租客" />
+        </div>
+      )}
+
       {loading ? (
         <div className="text-center py-12 text-gray-400">載入中...</div>
+      ) : properties.length > 0 && shownProperties.length === 0 ? (
+        <div className="text-center py-12 text-gray-400 text-sm">找不到符合的物業或房間</div>
       ) : properties.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-100 text-center py-16">
           <Building2 className="w-12 h-12 text-gray-200 mx-auto mb-3" />
@@ -109,7 +144,7 @@ export default function Properties() {
         </div>
       ) : (
         <div className="space-y-4">
-          {properties.map((property) => (
+          {shownProperties.map((property) => (
             <PropertyCard
               key={property.id}
               property={property}
@@ -117,6 +152,7 @@ export default function Properties() {
               isSelected={selectedProperty?.id === property.id}
               onSelect={() => setSelectedProperty(property)}
               onDelete={() => deleteProperty(property.id)}
+              onEdit={() => setEditProperty(properties.find((p) => p.id === property.id) ?? null)}
               onAddUnit={() => { setSelectedProperty(property); setShowAddUnit(true); }}
               onEditUnit={(unit) => { setSelectedProperty(property); setEditUnit(unit); }}
               onRefresh={fetchAll}
@@ -126,6 +162,7 @@ export default function Properties() {
       )}
 
       {showAddProperty && <AddPropertyModal onClose={() => setShowAddProperty(false)} onSaved={fetchAll} />}
+      {editProperty && <AddPropertyModal property={editProperty} onClose={() => setEditProperty(null)} onSaved={fetchAll} />}
       {showAddUnit && selectedProperty && (
         <AddUnitModal
           propertyId={selectedProperty.id}
@@ -145,8 +182,9 @@ export default function Properties() {
 }
 
 function PropertyCard({
-  property, contracts, isSelected, onSelect, onDelete, onAddUnit, onEditUnit, onRefresh
+  property, contracts, isSelected, onSelect, onDelete, onEdit, onAddUnit, onEditUnit, onRefresh
 }: {
+  onEdit: () => void;
   property: Property;
   contracts: Contract[];
   isSelected: boolean;
@@ -194,6 +232,12 @@ function PropertyCard({
               className="text-xs px-2 py-1 bg-brand text-white rounded-lg hover:bg-brand-dark transition-colors"
             >
               + 房間
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              className="text-xs px-2 py-1 text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              編輯
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
@@ -278,20 +322,23 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
-function AddPropertyModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState({ name: '', address: '', description: '' });
+function AddPropertyModal({ property, onClose, onSaved }: { property?: Property; onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState({
+    name: property?.name ?? '', address: property?.address ?? '', description: property?.description ?? '',
+  });
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    await api.post('/properties', form);
+    if (property) await api.put(`/properties/${property.id}`, form);
+    else await api.post('/properties', form);
     onSaved(); onClose();
   }
   return (
-    <Modal title="新增物業" onClose={onClose}>
+    <Modal title={property ? '編輯物業' : '新增物業'} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-3">
         <div><label className="block text-sm font-medium mb-1">物業名稱 <span className="text-red-400">*</span></label><input className="input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required /></div>
         <div><label className="block text-sm font-medium mb-1">地址 <span className="text-red-400">*</span></label><input className="input" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} required /></div>
         <div><label className="block text-sm font-medium mb-1">說明</label><textarea className="input" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={2} /></div>
-        <div className="flex gap-2"><button type="button" onClick={onClose} className="btn-secondary flex-1">取消</button><button type="submit" className="btn-primary flex-1">新增</button></div>
+        <div className="flex gap-2"><button type="button" onClick={onClose} className="btn-secondary flex-1">取消</button><button type="submit" className="btn-primary flex-1">{property ? '儲存' : '新增'}</button></div>
       </form>
     </Modal>
   );

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import api from '../api/client';
-import { Expense } from '../types';
+import { Expense, Property } from '../types';
 import HowTo from '../components/HowTo';
+import SearchBox, { matches } from '../components/SearchBox';
 
 const EXPENSE_LABELS: Record<string, string> = {
   MANAGEMENT: '管理費', REPAIR: '維修費', OTHER: '其他', INSURANCE: '保險', INTERNET: '網路',
@@ -17,9 +18,14 @@ export default function ExpenseRecords() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState<Expense | null>(null);
   const [loading, setLoading] = useState(true);
+  const [category, setCategory] = useState('ALL');
+  const [search, setSearch] = useState('');
+  const [properties, setProperties] = useState<Property[]>([]);
 
   useEffect(() => { fetchData(); }, [year, month]);
+  useEffect(() => { api.get('/properties').then((r) => setProperties(r.data)); }, []);
 
   async function fetchData() {
     setLoading(true);
@@ -34,7 +40,10 @@ export default function ExpenseRecords() {
     fetchData();
   }
 
-  const total = expenses.reduce((s, e) => s + Number(e.amount), 0);
+  const shown = expenses.filter((e) =>
+    (category === 'ALL' || e.category === category)
+    && matches(search, e.description, EXPENSE_LABELS[e.category], e.property?.name, e.unit?.unitNumber, e.amount));
+  const total = shown.reduce((s, e) => s + Number(e.amount), 0);
 
   return (
     <div className="px-6 py-6 max-w-4xl">
@@ -59,25 +68,41 @@ export default function ExpenseRecords() {
       {/* Total */}
       <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-5 flex items-center justify-between">
         <div>
-          <div className="text-xs text-gray-400 mb-1">本月支出合計</div>
+          <div className="text-xs text-gray-400 mb-1">本月支出合計{(category !== 'ALL' || search) && '（篩選後）'}</div>
           <div className="text-2xl font-bold text-gray-800">NT${total.toLocaleString()}</div>
         </div>
-        <div className="text-xs text-gray-400">{expenses.length} 筆支出</div>
+        <div className="text-xs text-gray-400">{shown.length} 筆支出</div>
+      </div>
+
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <div className="flex gap-1 bg-white rounded-xl p-1 border border-gray-100 flex-wrap">
+          {['ALL', ...NON_UTILITY].map((k) => (
+            <button
+              key={k}
+              onClick={() => setCategory(k)}
+              className={`px-3 py-1 rounded-lg text-xs font-medium ${category === k ? 'bg-brand text-white' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              {k === 'ALL' ? '全部' : EXPENSE_LABELS[k]}
+            </button>
+          ))}
+        </div>
+        <SearchBox value={search} onChange={setSearch} placeholder="搜尋說明、物業、房號" />
       </div>
 
       {loading ? (
         <div className="text-center py-12 text-gray-400">載入中...</div>
-      ) : expenses.length === 0 ? (
+      ) : shown.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-100 text-center py-12">
-          <div className="text-gray-400 text-sm mb-3">本月無支出紀錄</div>
+          <div className="text-gray-400 text-sm mb-3">{expenses.length > 0 ? '沒有符合篩選條件的支出' : '本月無支出紀錄'}</div>
           <button onClick={() => setShowAdd(true)} className="btn-primary text-sm">+ 新增支出</button>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gray-100 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 text-xs text-gray-400">
                 <th className="text-left px-4 py-3 font-medium">類別</th>
+                <th className="text-left px-4 py-3 font-medium">物業／房間</th>
                 <th className="text-left px-4 py-3 font-medium">說明</th>
                 <th className="text-left px-4 py-3 font-medium">日期</th>
                 <th className="text-right px-4 py-3 font-medium">金額</th>
@@ -85,7 +110,7 @@ export default function ExpenseRecords() {
               </tr>
             </thead>
             <tbody>
-              {expenses.map((e) => (
+              {shown.map((e) => (
                 <tr key={e.id} className="border-b border-gray-50 hover:bg-warm/50">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
@@ -93,10 +118,12 @@ export default function ExpenseRecords() {
                       <span className="font-medium text-gray-700">{EXPENSE_LABELS[e.category] ?? e.category}</span>
                     </div>
                   </td>
+                  <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{e.property?.name ?? '—'}{e.unit?.unitNumber ? ` ${e.unit.unitNumber}` : ''}</td>
                   <td className="px-4 py-3 text-gray-500">{e.description || '—'}</td>
                   <td className="px-4 py-3 text-gray-500">{new Date(e.date).toLocaleDateString('zh-TW')}</td>
                   <td className="px-4 py-3 text-right font-semibold text-gray-700">NT${Number(e.amount).toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <button onClick={() => setEditing(e)} className="text-xs text-gray-500 hover:text-gray-700 mr-3">編輯</button>
                     <button onClick={() => deleteExpense(e.id)} className="text-xs text-red-400 hover:text-red-600">刪除</button>
                   </td>
                 </tr>
@@ -106,28 +133,46 @@ export default function ExpenseRecords() {
         </div>
       )}
 
-      {showAdd && (
+      {(showAdd || editing) && (
         <AddExpenseModal
-          onClose={() => setShowAdd(false)}
-          onSaved={() => { setShowAdd(false); fetchData(); }}
+          expense={editing ?? undefined}
+          properties={properties}
+          onClose={() => { setShowAdd(false); setEditing(null); }}
+          onSaved={() => { setShowAdd(false); setEditing(null); fetchData(); }}
         />
       )}
     </div>
   );
 }
 
-function AddExpenseModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState({ category: 'MANAGEMENT', amount: '', date: new Date().toISOString().split('T')[0], description: '' });
+function AddExpenseModal({ expense, properties, onClose, onSaved }: {
+  expense?: Expense; properties: Property[]; onClose: () => void; onSaved: () => void;
+}) {
+  const [form, setForm] = useState({
+    propertyId: expense?.propertyId ?? properties[0]?.id ?? '',
+    category: (expense?.category ?? 'MANAGEMENT') as string,
+    amount: expense ? String(expense.amount) : '',
+    date: expense ? String(expense.date).split('T')[0] : new Date().toISOString().split('T')[0],
+    description: expense?.description ?? '',
+  });
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    await api.post('/expenses', form);
+    if (expense) await api.put(`/expenses/${expense.id}`, form);
+    else await api.post('/expenses', form);
     onSaved();
   }
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
-        <h3 className="font-bold text-lg mb-4">新增支出</h3>
+        <h3 className="font-bold text-lg mb-4">{expense ? '編輯支出' : '新增支出'}</h3>
         <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">物業</label>
+            <select value={form.propertyId} onChange={(e) => setForm({ ...form, propertyId: e.target.value })} className="input" required>
+              {properties.length === 0 && <option value="">請先到「房務」建立物業</option>}
+              {properties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">類別</label>
             <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="input">
@@ -152,7 +197,7 @@ function AddExpenseModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
           </div>
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose} className="btn-secondary flex-1">取消</button>
-            <button type="submit" className="btn-primary flex-1">新增</button>
+            <button type="submit" className="btn-primary flex-1">{expense ? '儲存' : '新增'}</button>
           </div>
         </form>
       </div>

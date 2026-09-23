@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react';
 import { BellRing, Volume2, BellOff } from 'lucide-react';
 import api from '../api/client';
 import HowTo from '../components/HowTo';
-import { BellSettings, DueItem, loadBellSettings, saveBellSettings, saveAcked, playBell } from '../lib/rentBell';
+import SearchBox, { matches } from '../components/SearchBox';
+import {
+  BellSettings, DueItem, UpcomingItem, ElecItem, loadBellSettings, saveBellSettings, saveAcked, playBell, alertQuery,
+} from '../lib/rentBell';
 
 interface ScheduleItem {
   contractId: string;
@@ -28,6 +31,8 @@ interface OverdueItem {
 interface Alerts {
   date: string;
   dueToday: DueItem[];
+  upcoming: UpcomingItem[];
+  electricity: ElecItem[];
   overdue: OverdueItem[];
   schedule: ScheduleItem[];
 }
@@ -43,13 +48,15 @@ const STATUS: Record<string, [string, string]> = {
 export default function RentBell() {
   const [settings, setSettings] = useState<BellSettings>(loadBellSettings);
   const [data, setData] = useState<Alerts | null>(null);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
   const [permission, setPermission] = useState<string>(
     'Notification' in window ? Notification.permission : 'unsupported',
   );
 
   useEffect(() => {
-    api.get('/rent-alerts/today').then((r) => setData(r.data));
-  }, []);
+    api.get(`/rent-alerts/today?${alertQuery(settings)}`).then((r) => setData(r.data));
+  }, [settings.rentDaysBefore, settings.elecDaysBefore]);
 
   function update(patch: Partial<BellSettings>) {
     const next = { ...settings, ...patch };
@@ -75,7 +82,7 @@ export default function RentBell() {
     <div className="px-6 py-6 max-w-4xl">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-800">收租鈴聲</h1>
-        <p className="text-xs text-gray-400 mt-0.5">每間房的繳租日當天響鈴提醒您收房租</p>
+        <p className="text-xs text-gray-400 mt-0.5">繳租日、房租快到期、預付電費快用完，時間到就響鈴通知</p>
       </div>
 
       <HowTo module="bell" />
@@ -85,7 +92,7 @@ export default function RentBell() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {settings.enabled ? <BellRing className="w-5 h-5 text-brand" /> : <BellOff className="w-5 h-5 text-gray-400" />}
-            <span className="text-sm font-semibold text-gray-700">繳租日當天響鈴</span>
+            <span className="text-sm font-semibold text-gray-700">收租／電費提醒響鈴</span>
           </div>
           <button
             onClick={() => update({ enabled: !settings.enabled })}
@@ -120,6 +127,39 @@ export default function RentBell() {
               <option value={60}>每 1 分鐘</option>
               <option value={300}>每 5 分鐘</option>
               <option value={900}>每 15 分鐘</option>
+            </select>
+          </label>
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-3">
+          <label className="text-xs text-gray-500">
+            房租到期前幾天先提醒
+            <select
+              value={settings.rentDaysBefore}
+              onChange={(e) => update({ rentDaysBefore: Number(e.target.value) })}
+              className="input mt-1 w-full"
+            >
+              <option value={0}>不提前，只在繳租日當天</option>
+              {[1, 2, 3, 5, 7].map((n) => <option key={n} value={n}>提前 {n} 天</option>)}
+            </select>
+          </label>
+          <label className="text-xs text-gray-500">
+            <span className="flex items-center justify-between">
+              預付電費快用完提醒
+              <input
+                type="checkbox"
+                checked={settings.elecEnabled}
+                onChange={(e) => update({ elecEnabled: e.target.checked })}
+                className="accent-brand"
+              />
+            </span>
+            <select
+              value={settings.elecDaysBefore}
+              disabled={!settings.elecEnabled}
+              onChange={(e) => update({ elecDaysBefore: Number(e.target.value) })}
+              className="input mt-1 w-full disabled:opacity-50"
+            >
+              {[1, 2, 3, 5, 7, 14].map((n) => <option key={n} value={n}>預估 {n} 天內用完就提醒</option>)}
             </select>
           </label>
         </div>
@@ -162,6 +202,41 @@ export default function RentBell() {
             )}
           </div>
 
+          {data.upcoming.length > 0 && (
+            <div className="bg-white rounded-2xl border border-blue-100 p-4 mb-5">
+              <div className="text-sm font-semibold text-blue-600 mb-3">房租快到期（{data.upcoming.length} 筆）</div>
+              <ul className="divide-y divide-gray-50">
+                {data.upcoming.map((i) => (
+                  <li key={`${i.contractId}-${i.dueDate}`} className="py-2 flex justify-between gap-3 text-sm">
+                    <span className="text-gray-700">
+                      {i.dueDate}（還有 {i.daysUntil} 天）・{i.propertyName} {i.unitNumber}・{i.tenantName}
+                    </span>
+                    <span className="font-bold text-gray-800 whitespace-nowrap">NT${(i.amount - i.paidAmount).toLocaleString()}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {settings.elecEnabled && data.electricity.length > 0 && (
+            <div className="bg-white rounded-2xl border border-orange-100 p-4 mb-5">
+              <div className="text-sm font-semibold text-orange-500 mb-3">預付電費快用完（{data.electricity.length} 間）</div>
+              <ul className="divide-y divide-gray-50">
+                {data.electricity.map((e) => (
+                  <li key={e.unitId} className="py-2 flex justify-between gap-3 text-sm">
+                    <span className="text-gray-700">
+                      {e.propertyName} {e.unitNumber}・{e.tenantName || '無租客'}・
+                      {e.depletionDate ? `預估 ${e.depletionDate} 用完（約 ${e.daysLeft} 天）` : '用電資料不足，無法預估'}
+                    </span>
+                    <span className={`font-bold whitespace-nowrap ${e.low ? 'text-red-500' : 'text-gray-800'}`}>
+                      剩 NT${e.balance.toLocaleString()}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {data.overdue.length > 0 && (
             <div className="bg-white rounded-2xl border border-red-100 p-4 mb-5">
               <div className="text-sm font-semibold text-red-600 mb-3">已過繳租日還沒收（{data.overdue.length} 筆）</div>
@@ -178,7 +253,15 @@ export default function RentBell() {
 
           {/* 各房間繳租日 */}
           <div className="bg-white rounded-2xl border border-gray-100 p-4">
-            <div className="text-sm font-semibold text-gray-700 mb-3">本月各房間繳租日</div>
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
+              <div className="text-sm font-semibold text-gray-700 mr-auto">本月各房間繳租日</div>
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="input text-xs py-1.5 px-2 w-28">
+                <option value="ALL">全部狀態</option>
+                <option value="UNPAID">未繳清</option>
+                <option value="PAID">已繳</option>
+              </select>
+              <SearchBox value={search} onChange={setSearch} placeholder="搜尋房號、租客" />
+            </div>
             {data.schedule.length === 0 ? (
               <div className="text-sm text-gray-400">目前沒有生效中的合約。繳租日在「合約」建立時設定。</div>
             ) : (
@@ -194,7 +277,10 @@ export default function RentBell() {
                     </tr>
                   </thead>
                   <tbody>
-                    {data.schedule.map((s) => {
+                    {data.schedule
+                      .filter((s) => (statusFilter === 'ALL' || (statusFilter === 'PAID' ? s.status === 'PAID' : s.status !== 'PAID'))
+                        && matches(search, s.propertyName, s.unitNumber, s.tenantName))
+                      .map((s) => {
                       const [label, cls] = STATUS[s.status] ?? [s.status, ''];
                       const isToday = s.dueDay === today;
                       return (

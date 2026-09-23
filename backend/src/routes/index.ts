@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, requireAdmin } from '../middleware/auth';
+import { listModules, listUsers, createUser, updateUser, deleteUser } from '../controllers/userController';
 import { requireTenant } from '../middleware/tenantAuth';
 import {
   getPrepaidOverview, getPrepaidCandidates, updatePrepaidConfig,
@@ -13,8 +14,13 @@ import {
   sendContractDocument, previewDocument, getDocumentByToken,
   getTemplates, createTemplate, deleteTemplate,
 } from '../controllers/contractDocumentController';
-import { getTodayRentAlerts, getRentUtilityStats } from '../controllers/rentAlertController';
-import { register, login, me } from '../controllers/authController';
+import { getTodayRentAlerts, getRentUtilityStats, getDormRecords } from '../controllers/rentAlertController';
+import {
+  createRentRecord, updateRentRecord, deleteRentRecord, deleteContract, deleteMaintenanceRequest,
+  updateExpense, updateUtilityBill, deleteUtilityBill, updatePrepaidRecord, deletePrepaidRecord,
+  updateContractTemplate, deletePayment,
+} from '../controllers/crudController';
+import { register, login, me, updateMe } from '../controllers/authController';
 import { getDashboard } from '../controllers/dashboardController';
 import { getProperties, createProperty, updateProperty, deleteProperty } from '../controllers/propertyController';
 import { getUnits, createUnit, updateUnit, deleteUnit } from '../controllers/unitController';
@@ -60,6 +66,14 @@ const router = Router();
 router.post('/auth/register', register);
 router.post('/auth/login', login);
 router.get('/auth/me', requireAuth, me);
+router.put('/auth/me', requireAuth, updateMe);
+
+// 帳號權限管理（僅管理員）
+router.get('/users', requireAuth, requireAdmin, listUsers);
+router.get('/users/modules', requireAuth, requireAdmin, listModules);
+router.post('/users', requireAuth, requireAdmin, createUser);
+router.put('/users/:id', requireAuth, requireAdmin, updateUser);
+router.delete('/users/:id', requireAuth, requireAdmin, deleteUser);
 
 // Dashboard
 router.get('/dashboard', requireAuth, getDashboard);
@@ -87,6 +101,7 @@ router.post('/tenants/:id/line-code', requireAuth, generateTenantBindingCode);
 router.get('/contracts', requireAuth, getContracts);
 router.post('/contracts', requireAuth, createContract);
 router.put('/contracts/:id', requireAuth, updateContract);
+router.delete('/contracts/:id', requireAuth, deleteContract);
 router.post('/contracts/:id/sign-invite', requireAuth, generateSignInvite);
 router.post('/contracts/:id/compliance-check', requireAuth, checkCompliance);
 
@@ -115,6 +130,9 @@ router.post('/settings/reminder/trigger', requireAuth, triggerReminders);
 
 // Rent Records
 router.get('/rent-records', requireAuth, getRentRecords);
+router.post('/rent-records', requireAuth, createRentRecord);
+router.put('/rent-records/:id', requireAuth, updateRentRecord);
+router.delete('/rent-records/:id', requireAuth, deleteRentRecord);
 router.put('/rent-records/:id/confirm', requireAuth, confirmPayment);
 router.post('/rent-records/mark-overdue', requireAuth, markOverdue);
 router.post('/rent-records/:id/remind', requireAuth, sendReminder);
@@ -122,11 +140,13 @@ router.post('/rent-records/:id/remind', requireAuth, sendReminder);
 // 收租鈴聲 / 房租與電費統計
 router.get('/rent-alerts/today', requireAuth, getTodayRentAlerts);
 router.get('/stats/rent-electricity', requireAuth, getRentUtilityStats);
+router.get('/dorm-records', requireAuth, getDormRecords);
 
 // Maintenance
 router.get('/maintenance', requireAuth, getMaintenanceRequests);
 router.post('/maintenance', requireAuth, createMaintenanceRequest);
 router.put('/maintenance/:id', requireAuth, updateMaintenanceRequest);
+router.delete('/maintenance/:id', requireAuth, deleteMaintenanceRequest);
 router.post('/maintenance/:id/analyze', requireAuth, analyzeMaintenanceRequest);
 
 // Expenses
@@ -134,6 +154,7 @@ router.get('/expenses', requireAuth, getExpenses);
 router.post('/expenses', requireAuth, createExpense);
 router.put('/expenses/:id/confirm', requireAuth, confirmExpense);
 router.delete('/expenses/:id', requireAuth, deleteExpense);
+router.put('/expenses/:id', requireAuth, updateExpense);
 router.get('/expenses/trend', requireAuth, getExpenseTrend);
 
 // Calendar
@@ -151,6 +172,8 @@ router.get('/utility-bills', requireAuth, getUtilityBills);
 router.post('/utility-bills/preview', requireAuth, previewUtilitySplit);
 router.post('/utility-bills', requireAuth, createUtilityBill);
 router.post('/utility-bills/:id/bill', requireAuth, billUtilityToTenants);
+router.put('/utility-bills/:id', requireAuth, updateUtilityBill);
+router.delete('/utility-bills/:id', requireAuth, deleteUtilityBill);
 
 // Rent comps（在地租金行情）
 router.get('/rent-comps', requireAuth, getRentComps);
@@ -176,6 +199,7 @@ router.get('/payments', requireAuth, getPayments);
 router.get('/payments/unmatched', requireAuth, getUnmatchedPayments);
 router.get('/payments/:id/suggestions', requireAuth, getMatchSuggestions);
 router.post('/payments/:id/match', requireAuth, matchPayment);
+router.delete('/payments/:id', requireAuth, deletePayment);
 router.post('/payments/simulate', requireAuth, simulatePayment);
 router.get('/contracts/:contractId/virtual-account', requireAuth, getContractVirtualAccount);
 // Webhook（對外，無 JWT）
@@ -190,6 +214,7 @@ router.post('/contracts/:id/document/send', requireAuth, sendContractDocument);
 router.get('/contract-templates', requireAuth, getTemplates);
 router.post('/contract-templates', requireAuth, createTemplate);
 router.delete('/contract-templates/:templateId', requireAuth, deleteTemplate);
+router.put('/contract-templates/:templateId', requireAuth, updateContractTemplate);
 router.get('/contracts/sign/:token/document', getDocumentByToken);
 
 // 預付電表（儲值制電費）
@@ -201,6 +226,8 @@ router.get('/prepaid/:unitId/records', requireAuth, getPrepaidRecords);
 router.post('/prepaid/:unitId/topup', requireAuth, postTopUp);
 router.post('/prepaid/:unitId/usage', requireAuth, postUsage);
 router.post('/prepaid/:unitId/adjust', requireAuth, postAdjust);
+router.put('/prepaid-records/:id', requireAuth, updatePrepaidRecord);
+router.delete('/prepaid-records/:id', requireAuth, deletePrepaidRecord);
 
 // 通知排程規則（每種通知各自的執行時間與參數）
 router.get('/notification-rules', requireAuth, getNotificationRules);

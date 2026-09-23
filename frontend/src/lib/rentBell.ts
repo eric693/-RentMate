@@ -7,6 +7,12 @@ export interface BellSettings {
   minute: number;
   /** 沒按「我知道了」時，每隔幾秒再響一次 */
   repeatSeconds: number;
+  /** 繳租日前幾天先提醒，0 = 只在當天響 */
+  rentDaysBefore: number;
+  /** 預付電費快用完提醒 */
+  elecEnabled: boolean;
+  /** 預估幾天內用完就提醒（餘額低於門檻也會提醒） */
+  elecDaysBefore: number;
 }
 
 export interface DueItem {
@@ -21,8 +27,41 @@ export interface DueItem {
   rentDueDay: number;
 }
 
+export interface UpcomingItem {
+  contractId: string;
+  propertyName: string;
+  unitNumber: string;
+  tenantName: string;
+  tenantPhone: string;
+  amount: number;
+  paidAmount: number;
+  dueDate: string;
+  daysUntil: number;
+}
+
+export interface ElecItem {
+  unitId: string;
+  propertyName: string;
+  unitNumber: string;
+  tenantName: string;
+  tenantPhone: string;
+  balance: number;
+  threshold: number;
+  daysLeft: number | null;
+  depletionDate: string | null;
+  low: boolean;
+}
+
+/** 提醒 API 的查詢參數，依使用者設定帶入 */
+export function alertQuery(s: BellSettings) {
+  return `rentDaysBefore=${s.rentDaysBefore}&elecDaysBefore=${s.elecDaysBefore}`;
+}
+
 const SETTINGS_KEY = 'rentbell:settings';
-const DEFAULTS: BellSettings = { enabled: true, hour: 9, minute: 0, repeatSeconds: 60 };
+const DEFAULTS: BellSettings = {
+  enabled: true, hour: 9, minute: 0, repeatSeconds: 60,
+  rentDaysBefore: 3, elecEnabled: true, elecDaysBefore: 3,
+};
 
 export function loadBellSettings(): BellSettings {
   try {
@@ -42,7 +81,7 @@ export function saveBellSettings(s: BellSettings) {
   window.dispatchEvent(new Event('rentbell:settings'));
 }
 
-/** 今天已按「我知道了」的合約 id */
+/** 今天已按「我知道了」的提醒 key（rent:/soon:/elec: 開頭） */
 export function loadAcked(date: string): string[] {
   try {
     return JSON.parse(localStorage.getItem(`rentbell:ack:${date}`) ?? '[]');

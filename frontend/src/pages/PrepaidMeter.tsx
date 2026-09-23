@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import {
-  Zap, Plus, RefreshCw, X, Settings2, AlertTriangle, CalendarClock, History, Check,
+  Zap, Plus, RefreshCw, X, Settings2, AlertTriangle, CalendarClock, History, Check, Pencil, Trash2,
 } from 'lucide-react';
 import api from '../api/client';
 import HowTo from '../components/HowTo';
+import SearchBox, { matches } from '../components/SearchBox';
+import PrepaidRecordForm from '../components/PrepaidRecordForm';
 
 interface PrepaidUnit {
   unitId: string;
@@ -38,6 +40,8 @@ export default function PrepaidMeter() {
   const [showConfig, setShowConfig] = useState(false);
   const [action, setAction] = useState<{ unit: PrepaidUnit; mode: 'topup' | 'usage' } | null>(null);
   const [history, setHistory] = useState<PrepaidUnit | null>(null);
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<'ALL' | 'LOW' | 'SOON'>('ALL');
 
   async function fetchData() {
     setLoading(true);
@@ -54,6 +58,10 @@ export default function PrepaidMeter() {
   useEffect(() => { fetchData(); }, []);
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 3000); }
+
+  const shownUnits = units.filter((u) =>
+    (filter === 'ALL' || (filter === 'LOW' ? u.low : u.daysLeft != null && u.daysLeft <= 7))
+    && matches(search, u.propertyName, u.unitNumber, u.tenantName));
 
   async function runCheck() {
     setChecking(true);
@@ -106,8 +114,27 @@ export default function PrepaidMeter() {
         </div>
       )}
 
+      {units.length > 0 && (
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <div className="flex gap-1 bg-white rounded-xl p-1 border border-gray-100">
+            {([['ALL', '全部'], ['LOW', '餘額不足'], ['SOON', '7 天內用完']] as const).map(([k, l]) => (
+              <button
+                key={k}
+                onClick={() => setFilter(k)}
+                className={`px-3 py-1 rounded-lg text-xs font-medium ${filter === k ? 'bg-brand text-white' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+          <SearchBox value={search} onChange={setSearch} placeholder="搜尋物業、房號、租客" />
+        </div>
+      )}
+
       {loading ? (
         <div className="text-center py-16 text-gray-400">載入中...</div>
+      ) : units.length > 0 && shownUnits.length === 0 ? (
+        <div className="text-center py-12 text-gray-400 text-sm">沒有符合條件的房間</div>
       ) : units.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-100 py-16 text-center">
           <Zap className="w-12 h-12 text-gray-200 mx-auto mb-3" />
@@ -116,7 +143,7 @@ export default function PrepaidMeter() {
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 gap-3">
-          {units.map((u) => (
+          {shownUnits.map((u) => (
             <div
               key={u.unitId}
               className={`bg-white rounded-2xl border p-4 ${u.low ? 'border-red-200' : 'border-gray-100'}`}
@@ -193,7 +220,7 @@ export default function PrepaidMeter() {
           onDone={(msg) => { setAction(null); fetchData(); showToast(msg); }}
         />
       )}
-      {history && <HistoryModal unit={history} onClose={() => setHistory(null)} />}
+      {history && <HistoryModal unit={history} onClose={() => setHistory(null)} onChanged={fetchData} />}
     </div>
   );
 }
@@ -367,12 +394,21 @@ function ActionModal({
 }
 
 /** 儲值／用電流水帳。 */
-function HistoryModal({ unit, onClose }: { unit: PrepaidUnit; onClose: () => void }) {
+function HistoryModal({ unit, onClose, onChanged }: { unit: PrepaidUnit; onClose: () => void; onChanged: () => void }) {
   const [data, setData] = useState<any>(null);
+  const [editing, setEditing] = useState<any>(null);
 
-  useEffect(() => {
+  function load() {
     api.get(`/prepaid/${unit.unitId}/records`).then((r) => setData(r.data)).catch(() => {});
-  }, [unit.unitId]);
+  }
+  useEffect(load, [unit.unitId]);
+
+  async function remove(r: any) {
+    if (!confirm('確定刪除這筆紀錄？之後的餘額與目前餘額會自動重算。')) return;
+    await api.delete(`/prepaid-records/${r.id}`);
+    load();
+    onChanged();
+  }
 
   const LABEL: Record<string, string> = { TOPUP: '儲值', USAGE: '用電', ADJUST: '調整' };
 
@@ -413,9 +449,22 @@ function HistoryModal({ unit, onClose }: { unit: PrepaidUnit; onClose: () => voi
                   </div>
                 </div>
                 <div className="text-xs text-gray-400 flex-shrink-0">餘 NT${r.balanceAfter.toLocaleString()}</div>
+                <button onClick={() => setEditing(r)} className="p-1 rounded hover:bg-gray-100" aria-label="編輯">
+                  <Pencil className="w-3.5 h-3.5 text-gray-400" />
+                </button>
+                <button onClick={() => remove(r)} className="p-1 rounded hover:bg-red-50" aria-label="刪除">
+                  <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                </button>
               </div>
             ))}
           </div>
+        )}
+        {editing && (
+          <PrepaidRecordForm
+            record={editing}
+            onClose={() => setEditing(null)}
+            onSaved={() => { setEditing(null); load(); onChanged(); }}
+          />
         )}
       </div>
     </div>

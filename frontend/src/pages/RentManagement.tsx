@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Plus, Pencil, Trash2 } from 'lucide-react';
 import api from '../api/client';
 import { RentRecord } from '../types';
 import HowTo from '../components/HowTo';
+import SearchBox, { matches } from '../components/SearchBox';
+import RentRecordForm, { ContractOption, RentRecordLike } from '../components/RentRecordForm';
 
 export default function RentManagement() {
   const now = new Date();
@@ -14,6 +16,9 @@ export default function RentManagement() {
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [markingOverdue, setMarkingOverdue] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [form, setForm] = useState<{ record?: RentRecordLike } | null>(null);
+  const [contractOptions, setContractOptions] = useState<ContractOption[]>([]);
 
   useEffect(() => { fetchData(); }, [year, month]);
 
@@ -35,6 +40,29 @@ export default function RentManagement() {
     fetchData();
   }
 
+  async function openCreate() {
+    if (contractOptions.length === 0) {
+      const r = await api.get('/contracts');
+      setContractOptions(
+        r.data
+          .filter((c: { status: string }) => c.status === 'ACTIVE')
+          .map((c: { id: string; monthlyRent: number; unit?: { unitNumber: string; property?: { name: string } }; tenant?: { name: string } }) => ({
+            id: c.id,
+            label: `${c.unit?.property?.name ?? ''} ${c.unit?.unitNumber ?? ''}・${c.tenant?.name ?? ''}`,
+            monthlyRent: Number(c.monthlyRent),
+          })),
+      );
+    }
+    setForm({});
+  }
+
+  async function handleDelete(r: RentRecord) {
+    if (!confirm(`確定刪除 ${r.contract?.unit?.unitNumber ?? ''} ${r.contract?.tenant?.name ?? ''} ${r.year}/${r.month} 的租金單？`)) return;
+    await api.delete(`/rent-records/${r.id}`);
+    showToast('已刪除');
+    fetchData();
+  }
+
   async function handleMarkOverdue() {
     setMarkingOverdue(true);
     const r = await api.post('/rent-records/mark-overdue');
@@ -46,7 +74,9 @@ export default function RentManagement() {
   const statusLabel = (s: string) => ({ PAID: '已繳', PENDING: '待繳', OVERDUE: '逾期', PARTIAL: '部分' }[s] ?? s);
   const statusClass = (s: string) => ({ PAID: 'badge-paid', PENDING: 'badge-pending', OVERDUE: 'badge-overdue', PARTIAL: 'badge-pending' }[s] ?? '');
 
-  const filtered = statusFilter === 'ALL' ? records : records.filter((r) => r.status === statusFilter);
+  const filtered = records
+    .filter((r) => statusFilter === 'ALL' || r.status === statusFilter)
+    .filter((r) => matches(search, r.contract?.tenant?.name, r.contract?.tenant?.phone, r.contract?.unit?.unitNumber, r.contract?.unit?.property?.name, r.notes));
 
   const totalRent = records.reduce((s, r) => s + Number(r.amount), 0);
   const collectedRent = records.filter((r) => r.status === 'PAID' || r.status === 'PARTIAL').reduce((s, r) => s + Number(r.paidAmount ?? r.amount), 0);
@@ -64,7 +94,10 @@ export default function RentManagement() {
           <h1 className="text-xl font-bold text-gray-800">租金管理</h1>
           <p className="text-xs text-gray-400 mt-0.5">{year} 年 {month} 月租金收款狀況</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <button onClick={openCreate} className="flex items-center gap-1.5 text-xs bg-brand text-white rounded-lg px-3 py-1.5 hover:bg-brand-dark">
+            <Plus className="w-3.5 h-3.5" />新增租金單
+          </button>
           <button
             onClick={handleMarkOverdue}
             disabled={markingOverdue}
@@ -101,7 +134,7 @@ export default function RentManagement() {
       </div>
 
       {/* Filter tabs */}
-      <div className="flex gap-1.5 mb-4">
+      <div className="flex gap-1.5 mb-4 flex-wrap items-center">
         {['ALL', 'PENDING', 'OVERDUE', 'PAID', 'PARTIAL'].map((s) => (
           <button
             key={s}
@@ -112,14 +145,15 @@ export default function RentManagement() {
             <span className="ml-1 opacity-60">({s === 'ALL' ? records.length : records.filter(r => r.status === s).length})</span>
           </button>
         ))}
+        <SearchBox value={search} onChange={setSearch} placeholder="搜尋租客、電話、房號" className="ml-auto" />
       </div>
 
       {loading ? (
         <div className="text-center py-12 text-gray-400">載入中...</div>
       ) : filtered.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-gray-100 text-center py-12 text-gray-400 text-sm">本月無收租紀錄</div>
+        <div className="bg-white rounded-2xl border border-gray-100 text-center py-12 text-gray-400 text-sm">{search ? `找不到「${search}」的紀錄` : '本月無收租紀錄'}</div>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gray-100 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 text-xs text-gray-400">
@@ -129,6 +163,7 @@ export default function RentManagement() {
                 <th className="text-left px-4 py-3 font-medium">到期日</th>
                 <th className="text-left px-4 py-3 font-medium">狀態</th>
                 <th className="px-4 py-3" />
+                <th className="pr-3 py-3 text-right text-xs font-medium">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -154,11 +189,28 @@ export default function RentManagement() {
                       <span className="text-xs text-gray-400">{new Date(r.paidDate).toLocaleDateString('zh-TW')}</span>
                     )}
                   </td>
+                  <td className="pr-3 py-3 whitespace-nowrap text-right">
+                    <button onClick={() => setForm({ record: r as unknown as RentRecordLike })} className="p-1.5 rounded-lg hover:bg-gray-100" aria-label="編輯">
+                      <Pencil className="w-3.5 h-3.5 text-gray-500" />
+                    </button>
+                    <button onClick={() => handleDelete(r)} className="p-1.5 rounded-lg hover:bg-red-50" aria-label="刪除">
+                      <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {form && (
+        <RentRecordForm
+          record={form.record}
+          contracts={contractOptions}
+          onClose={() => setForm(null)}
+          onSaved={() => { setForm(null); fetchData(); showToast('已儲存'); window.dispatchEvent(new Event('rentbell:refresh')); }}
+        />
       )}
 
       {confirmModal && (

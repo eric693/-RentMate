@@ -123,6 +123,18 @@ export default function ContractDocumentModal({ contract, onClose, onSent }: Pro
     } catch { flash('存成範本失敗', true); }
   }
 
+  /** 範本改名，並可選擇用目前編輯中的內容覆蓋範本內容 */
+  async function editTemplate(t: { id: string; name: string; body: string }) {
+    const name = prompt('範本名稱：', t.name);
+    if (name === null) return;
+    const overwrite = confirm('要用目前編輯中的租約內容覆蓋這個範本嗎？\n按「取消」只改名稱。');
+    try {
+      const { data } = await api.put(`/contract-templates/${t.id}`, { name: name || t.name, body: overwrite ? body : undefined });
+      setTemplates((list) => list.map((x) => (x.id === t.id ? { ...x, ...data } : x)));
+      flash('範本已更新');
+    } catch { flash('更新範本失敗', true); }
+  }
+
   async function removeTemplate(id: string) {
     if (!confirm('確定刪除此範本？')) return;
     try {
@@ -266,6 +278,9 @@ export default function ContractDocumentModal({ contract, onClose, onSent }: Pro
                         className="flex-1 text-left text-sm text-gray-700 hover:text-brand"
                       >
                         {t.name}
+                      </button>
+                      <button onClick={() => editTemplate(t)} className="text-gray-300 hover:text-gray-600" aria-label="編輯範本">
+                        <Pencil className="w-3.5 h-3.5" />
                       </button>
                       <button onClick={() => removeTemplate(t.id)} className="text-gray-300 hover:text-red-500">
                         <Trash2 className="w-3.5 h-3.5" />

@@ -1,7 +1,14 @@
 export interface User {
   id: string;
+  /** 登入帳號（Email 或自訂帳號） */
   email: string;
   name: string;
+  role?: 'ADMIN' | 'STAFF';
+  permissions?: string[];
+  ownerId?: string | null;
+  active?: boolean;
+  lastLoginAt?: string | null;
+  createdAt?: string;
 }
 
 export interface Property {

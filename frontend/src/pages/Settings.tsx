@@ -3,6 +3,7 @@ import { Bell, MessageCircle, Users, UserPlus, Shield, X, Copy, Check, ChevronRi
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import HowTo from '../components/HowTo';
+import { Link } from 'react-router-dom';
 
 type SettingsTab = 'account' | 'team' | 'notifications';
 
@@ -85,6 +86,9 @@ export default function Settings() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold text-gray-800">設定</h1>
+        <Link to="/accounts" className="flex items-center gap-1 text-xs border border-gray-200 rounded-lg px-3 py-1.5 text-gray-600 hover:border-brand hover:text-brand">
+          <Shield className="w-3.5 h-3.5" />帳號權限<ChevronRight className="w-3.5 h-3.5" />
+        </Link>
       </div>
 
       <HowTo module="settings" />

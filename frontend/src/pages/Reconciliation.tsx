@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Sparkles, Link2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import api from '../api/client';
 import HowTo from '../components/HowTo';
+import SearchBox, { matches } from '../components/SearchBox';
 
 interface Payment {
   id: string;
@@ -39,6 +40,7 @@ export default function Reconciliation() {
   const [active, setActive] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<Record<string, Suggestion[]>>({});
   const [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState('');
 
   useEffect(() => { fetchData(); }, []);
 
@@ -69,6 +71,19 @@ export default function Reconciliation() {
     }
   }
 
+  async function removePayment(p: Payment) {
+    if (!confirm(`確定刪除這筆 NT$${Number(p.amount).toLocaleString()} 的入帳？（例如重複匯入的資料）`)) return;
+    try {
+      await api.delete(`/payments/${p.id}`);
+      fetchData();
+    } catch (e: unknown) {
+      alert((e as { response?: { data?: { error?: string } } }).response?.data?.error ?? '刪除失敗');
+    }
+  }
+
+  const shown = payments.filter((p) =>
+    matches(search, p.payerName, p.note, p.amount, p.contract?.tenant?.name, p.contract?.unit?.unitNumber, p.contract?.unit?.property?.name));
+
   return (
     <div className="px-6 py-6 max-w-3xl">
       <div className="mb-6">
@@ -78,8 +93,16 @@ export default function Reconciliation() {
 
       <HowTo module="reconcile" />
 
+      {payments.length > 0 && (
+        <div className="mb-4 flex">
+          <SearchBox value={search} onChange={setSearch} placeholder="搜尋付款人、金額、房號、備註" className="max-w-none" />
+        </div>
+      )}
+
       {loading ? (
         <div className="text-center py-12 text-gray-400">載入中...</div>
+      ) : payments.length > 0 && shown.length === 0 ? (
+        <div className="card text-center py-8 text-gray-400 text-sm">找不到「{search}」的入帳</div>
       ) : payments.length === 0 ? (
         <div className="card text-center py-12">
           <CheckCircle2 className="w-10 h-10 text-green-400 mx-auto mb-3" />
@@ -87,7 +110,7 @@ export default function Reconciliation() {
         </div>
       ) : (
         <div className="space-y-3">
-          {payments.map((p) => (
+          {shown.map((p) => (
             <div key={p.id} className="card">
               <div className="flex items-start justify-between">
                 <div>
@@ -113,6 +136,11 @@ export default function Reconciliation() {
                   {active === p.id ? '收合' : '智慧建議'}
                 </button>
               </div>
+              {p.contract && (
+                <div className="flex justify-end mt-1">
+                  <button onClick={() => removePayment(p)} className="text-xs text-red-400 hover:text-red-600">刪除這筆入帳</button>
+                </div>
+              )}
 
               {active === p.id && (
                 <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">

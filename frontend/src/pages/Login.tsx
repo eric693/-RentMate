@@ -17,8 +17,8 @@ export default function Login() {
     try {
       await login(email, password);
       navigate('/');
-    } catch {
-      setError('Email 或密碼錯誤');
+    } catch (err: unknown) {
+      setError((err as { response?: { data?: { error?: string } } }).response?.data?.error ?? '帳號或密碼錯誤');
     } finally {
       setLoading(false);
     }
@@ -38,13 +38,15 @@ export default function Login() {
         <div className="card shadow-md">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">帳號</label>
               <input
-                type="email"
+                type="text"
+                autoCapitalize="none"
+                autoComplete="username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="input"
-                placeholder="your@email.com"
+                placeholder="Email 或自訂帳號"
                 required
               />
             </div>

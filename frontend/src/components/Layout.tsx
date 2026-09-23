@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import api from '../api/client';
 import InstallPrompt from './InstallPrompt';
 import RentBellWatcher from './RentBellWatcher';
+import { can, canRoute, isAdmin } from '../lib/permissions';
 import {
   Home,
   LayoutDashboard,
@@ -19,12 +20,14 @@ import {
   Megaphone,
   TrendingUp,
   LineChart,
+  ShieldCheck,
 } from 'lucide-react';
 
 const FINANCE_ITEMS = [
   { to: '/finance', label: '財務總覽', exact: true },
   { to: '/finance/workbench', label: '收款工作台', exact: false },
   { to: '/finance/bell', label: '收租鈴聲', exact: false },
+  { to: '/finance/records', label: '收租與電費紀錄', exact: false },
   { to: '/finance/stats', label: '房租與電費統計', exact: false },
   { to: '/finance/rent', label: '租金管理', exact: false },
   { to: '/finance/reconcile', label: '對帳中心', exact: false },
@@ -42,6 +45,7 @@ export default function Layout() {
   const [urgentCount, setUrgentCount] = useState(0);
 
   useEffect(() => {
+    if (!can(user, 'dashboard')) return;
     api.get('/dashboard').then((r) => {
       const d = r.data;
       setUrgentCount((d.rentSummary?.overdueCount ?? 0) + (d.pendingMaintenance ?? 0));
@@ -55,7 +59,7 @@ export default function Layout() {
   return (
     <div className="flex h-screen bg-warm overflow-hidden">
       <InstallPrompt />
-      <RentBellWatcher />
+      {can(user, 'finance') && <RentBellWatcher />}
       {/* Sidebar */}
       <aside className="hidden md:flex flex-col w-56 bg-white border-r border-gray-100 flex-shrink-0">
         {/* Logo */}
@@ -78,14 +82,14 @@ export default function Layout() {
               <Building2 className="w-3.5 h-3.5 text-gray-400" />
               <span className="text-xs text-gray-400">目前工作區</span>
             </div>
-            <span className="text-xs bg-brand/10 text-brand px-1.5 py-0.5 rounded-full font-medium">擁有者</span>
+            <span className="text-xs bg-brand/10 text-brand px-1.5 py-0.5 rounded-full font-medium">{isAdmin(user) ? '管理員' : '員工'}</span>
           </div>
           <div className="font-semibold text-gray-700 text-sm">{user?.name}</div>
           <div className="flex items-center gap-1.5 mt-1">
             <div className="w-5 h-5 bg-brand rounded-full flex items-center justify-center">
               <span className="text-white text-xs font-bold">{user?.name?.charAt(0)}</span>
             </div>
-            <span className="text-xs text-gray-400">擁有者登入中</span>
+            <span className="text-xs text-gray-400 truncate">{user?.email}</span>
           </div>
         </div>
 
@@ -103,12 +107,12 @@ export default function Layout() {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5">
-          <SidebarLink to="/" label="總覽" icon={LayoutDashboard} exact />
-          <SidebarLink to="/properties" label="房務" icon={Building2} />
-          <SidebarLink to="/tenants" label="租客" icon={Users} />
+          {can(user, 'dashboard') && <SidebarLink to="/" label="總覽" icon={LayoutDashboard} exact />}
+          {can(user, 'properties') && <SidebarLink to="/properties" label="房務" icon={Building2} />}
+          {can(user, 'tenants') && <SidebarLink to="/tenants" label="租客" icon={Users} />}
 
           {/* 帳務 submenu */}
-          <div>
+          {can(user, 'finance') && <div>
             <button
               onClick={() => setFinanceOpen(!financeOpen)}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
@@ -139,18 +143,19 @@ export default function Layout() {
                 ))}
               </div>
             )}
-          </div>
+          </div>}
 
-          <SidebarLink to="/listings" label="空房刊登" icon={Megaphone} />
-          <SidebarLink to="/roi" label="投報分析" icon={TrendingUp} />
-          <SidebarLink to="/market" label="租金行情" icon={LineChart} />
-          <SidebarLink to="/maintenance" label="報修" icon={Wrench} />
-          <SidebarLink to="/contracts" label="合約" icon={FileText} />
-          <SidebarLink to="/settings" label="設定" icon={Settings} />
+          {can(user, 'listings') && <SidebarLink to="/listings" label="空房刊登" icon={Megaphone} />}
+          {can(user, 'roi') && <SidebarLink to="/roi" label="投報分析" icon={TrendingUp} />}
+          {can(user, 'market') && <SidebarLink to="/market" label="租金行情" icon={LineChart} />}
+          {can(user, 'maintenance') && <SidebarLink to="/maintenance" label="報修" icon={Wrench} />}
+          {can(user, 'contracts') && <SidebarLink to="/contracts" label="合約" icon={FileText} />}
+          {can(user, 'settings') && <SidebarLink to="/settings" label="設定" icon={Settings} />}
+          <SidebarLink to="/accounts" label={isAdmin(user) ? '帳號權限' : '我的帳號'} icon={ShieldCheck} />
         </nav>
 
         {/* Bottom tip */}
-        <div className="mx-3 mb-3 bg-warm rounded-xl p-3 border border-gray-100">
+        {can(user, 'settings') && <div className="mx-3 mb-3 bg-warm rounded-xl p-3 border border-gray-100">
           <div className="flex items-center gap-1.5 mb-1">
             <Sparkles className="w-3.5 h-3.5 text-brand" />
             <span className="text-xs font-semibold text-gray-600">使用小秘訣</span>
@@ -159,7 +164,7 @@ export default function Layout() {
           <button onClick={() => navigate('/settings')} className="w-full text-xs bg-brand text-white rounded-lg py-1.5 font-medium hover:bg-brand-dark transition-colors">
             立即設定
           </button>
-        </div>
+        </div>}
 
         <div className="px-4 pb-3 text-xs text-gray-300">RentMate 房東管理後台 v1.0.0</div>
       </aside>
@@ -178,7 +183,8 @@ export default function Layout() {
             { to: '/finance', label: '帳務', icon: CreditCard, exact: false },
             { to: '/roi', label: '投報', icon: TrendingUp, exact: false },
             { to: '/settings', label: '設定', icon: Settings, exact: false },
-          ].map((item) => (
+            { to: '/accounts', label: '帳號', icon: ShieldCheck, exact: false },
+          ].filter((item) => canRoute(user, item.to)).slice(0, 5).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

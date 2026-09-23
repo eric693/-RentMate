@@ -14,7 +14,8 @@ async function runDailyReminders(opts = {}) {
         include: { user: true },
     });
     // Get users with default settings (no record yet = use defaults)
-    const allUsers = await app_1.prisma.user.findMany({ select: { id: true } });
+    // 員工帳號共用管理員的資料，不另外跑提醒
+    const allUsers = await app_1.prisma.user.findMany({ where: { role: 'ADMIN' }, select: { id: true } });
     const settingUserIds = new Set(settings.map((s) => s.userId));
     const defaultUsers = allUsers
         .filter((u) => !settingUserIds.has(u.id))

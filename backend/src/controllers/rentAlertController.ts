@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../app';
+import { getPrepaidStatus } from '../services/prepaidService';
 
 const TZ = 'Asia/Taipei';
 
@@ -19,6 +20,21 @@ function effectiveDueDay(rentDueDay: number, year: number, month: number) {
   return Math.min(Math.max(rentDueDay, 1), lastDay);
 }
 
+/** 台北日期加減天數 */
+function addDays(ymd: { year: number; month: number; day: number }, n: number) {
+  const dt = new Date(Date.UTC(ymd.year, ymd.month - 1, ymd.day + n));
+  return { year: dt.getUTCFullYear(), month: dt.getUTCMonth() + 1, day: dt.getUTCDate() };
+}
+
+const fmt = (x: { year: number; month: number; day: number }) =>
+  `${x.year}-${String(x.month).padStart(2, '0')}-${String(x.day).padStart(2, '0')}`;
+
+/** 房東在「通知排程」設定的電費門檻，沒設定用 300 元 */
+async function prepaidThreshold(userId: string) {
+  const rule = await prisma.notificationRule.findUnique({ where: { userId_kind: { userId, kind: 'PREPAID_LOW' } } });
+  return Number(rule?.threshold ?? 300);
+}
+
 async function getUserUnits(userId: string) {
   return prisma.unit.findMany({
     where: { property: { userId } },
@@ -32,19 +48,32 @@ async function getUserUnits(userId: string) {
  */
 export async function getTodayRentAlerts(req: AuthRequest, res: Response) {
   const today = taipeiYMD();
+  // 提前幾天提醒收租／電費快用完，0 代表不提前
+  const rentDaysBefore = Math.min(Math.max(Number(req.query.rentDaysBefore ?? 3) || 0, 0), 14);
+  const elecDaysBefore = Math.min(Math.max(Number(req.query.elecDaysBefore ?? 3) || 0, 0), 30);
+  const nextMonth = addDays({ ...today, day: 1 }, 32);
   const contracts = await prisma.contract.findMany({
     where: { status: 'ACTIVE', unit: { property: { userId: req.userId! } } },
     include: {
       tenant: true,
       unit: { include: { property: true } },
-      rentRecords: { where: { year: today.year, month: today.month } },
+      rentRecords: {
+        where: {
+          OR: [
+            { year: today.year, month: today.month },
+            { year: nextMonth.year, month: nextMonth.month },
+          ],
+        },
+      },
     },
   });
+  const recordOf = (c: typeof contracts[number], year: number, month: number) =>
+    c.rentRecords.find((r) => r.year === year && r.month === month);
 
   const dueToday = [];
   for (const c of contracts) {
     if (effectiveDueDay(c.rentDueDay, today.year, today.month) !== today.day) continue;
-    const record = c.rentRecords[0];
+    const record = recordOf(c, today.year, today.month);
     if (record?.status === 'PAID') continue;
     dueToday.push({
       contractId: c.id,
@@ -85,7 +114,7 @@ export async function getTodayRentAlerts(req: AuthRequest, res: Response) {
   // 本月各房間繳租日一覽（供「每間房的繳租日」清單）
   const schedule = contracts
     .map((c) => {
-      const record = c.rentRecords[0];
+      const record = recordOf(c, today.year, today.month);
       return {
         contractId: c.id,
         propertyName: c.unit.property.name,
@@ -98,7 +127,59 @@ export async function getTodayRentAlerts(req: AuthRequest, res: Response) {
     })
     .sort((a, b) => a.dueDay - b.dueDay || a.unitNumber.localeCompare(b.unitNumber));
 
+  // 即將到期的房租（未來 N 天內）
+  const upcoming = [];
+  for (let k = 1; k <= rentDaysBefore; k++) {
+    const d = addDays(today, k);
+    for (const c of contracts) {
+      if (effectiveDueDay(c.rentDueDay, d.year, d.month) !== d.day) continue;
+      if (new Date(`${fmt(d)}T00:00:00+08:00`) > c.endDate) continue;
+      const record = recordOf(c, d.year, d.month);
+      if (record?.status === 'PAID') continue;
+      upcoming.push({
+        contractId: c.id,
+        propertyName: c.unit.property.name,
+        unitNumber: c.unit.unitNumber,
+        tenantName: c.tenant.name,
+        tenantPhone: c.tenant.phone,
+        amount: Number(record?.amount ?? c.monthlyRent),
+        paidAmount: Number(record?.paidAmount ?? 0),
+        dueDate: fmt(d),
+        daysUntil: k,
+      });
+    }
+  }
+
+  // 預付電費快用完：餘額低於門檻，或預估 N 天內用完
+  const threshold = await prepaidThreshold(req.userId!);
+  const prepaidUnits = await prisma.unit.findMany({
+    where: { prepaidEnabled: true, property: { userId: req.userId! } },
+    include: { property: true, contracts: { where: { status: 'ACTIVE' }, include: { tenant: true } } },
+  });
+  const electricity = [];
+  for (const u of prepaidUnits) {
+    const st = await getPrepaidStatus(u.id, threshold);
+    const soon = st.daysLeft != null && st.daysLeft <= elecDaysBefore;
+    if (!st.low && !soon) continue;
+    const tenant = u.contracts[0]?.tenant;
+    electricity.push({
+      unitId: u.id,
+      propertyName: u.property.name,
+      unitNumber: u.unitNumber,
+      tenantName: tenant?.name ?? '',
+      tenantPhone: tenant?.phone ?? '',
+      balance: st.balance,
+      threshold: st.threshold,
+      daysLeft: st.daysLeft,
+      depletionDate: st.depletionDate,
+      low: st.low,
+    });
+  }
+  electricity.sort((a, b) => (a.daysLeft ?? 999) - (b.daysLeft ?? 999) || a.balance - b.balance);
+
   res.json({
+    upcoming,
+    electricity,
     date: `${today.year}-${String(today.month).padStart(2, '0')}-${String(today.day).padStart(2, '0')}`,
     dueToday,
     overdue,
@@ -223,4 +304,132 @@ export async function getRentUtilityStats(req: AuthRequest, res: Response) {
       (a, b) => a.propertyName.localeCompare(b.propertyName) || a.unitNumber.localeCompare(b.unitNumber),
     ),
   });
+}
+
+/**
+ * 宿舍收租與電費紀錄：各房間現況（下次繳租日、電費餘額與預估用完日）
+ * ＋依時間排序的收租／電費流水。可用 unitId、year、month 篩選。
+ */
+export async function getDormRecords(req: AuthRequest, res: Response) {
+  const userId = req.userId!;
+  const unitId = req.query.unitId ? String(req.query.unitId) : undefined;
+  const year = Number(req.query.year) || taipeiYMD().year;
+  const month = req.query.month ? Number(req.query.month) : undefined;
+  const today = taipeiYMD();
+
+  const from = new Date(`${year}-${String(month ?? 1).padStart(2, '0')}-01T00:00:00+08:00`);
+  const toYM = month ? addDays({ year, month, day: 1 }, 32) : { year: year + 1, month: 1, day: 1 };
+  const to = new Date(`${toYM.year}-${String(toYM.month).padStart(2, '0')}-01T00:00:00+08:00`);
+
+  const threshold = await prepaidThreshold(userId);
+  const units = await prisma.unit.findMany({
+    where: { property: { userId }, ...(unitId ? { id: unitId } : {}) },
+    include: {
+      property: true,
+      contracts: { where: { status: 'ACTIVE' }, include: { tenant: true } },
+    },
+    orderBy: [{ property: { name: 'asc' } }, { unitNumber: 'asc' }],
+  });
+  const unitIds = units.map((u) => u.id);
+
+  const rooms = [];
+  for (const u of units) {
+    const c = u.contracts[0];
+    let nextDueDate: string | null = null;
+    if (c) {
+      const thisDue = effectiveDueDay(c.rentDueDay, today.year, today.month);
+      let target = { year: today.year, month: today.month, day: thisDue };
+      if (thisDue < today.day) {
+        const nm = addDays({ ...today, day: 1 }, 32);
+        target = { year: nm.year, month: nm.month, day: effectiveDueDay(c.rentDueDay, nm.year, nm.month) };
+      }
+      nextDueDate = fmt(target);
+    }
+    const unpaid = c
+      ? await prisma.rentRecord.aggregate({
+          where: { contractId: c.id, status: { in: ['PENDING', 'OVERDUE', 'PARTIAL'] } },
+          _count: true,
+          _sum: { amount: true, paidAmount: true },
+        })
+      : null;
+    const prepaid = u.prepaidEnabled ? await getPrepaidStatus(u.id, threshold) : null;
+    rooms.push({
+      unitId: u.id,
+      propertyName: u.property.name,
+      unitNumber: u.unitNumber,
+      contractId: c?.id ?? null,
+      tenantName: c?.tenant.name ?? null,
+      tenantPhone: c?.tenant.phone ?? null,
+      monthlyRent: Number(c?.monthlyRent ?? u.monthlyRent),
+      rentDueDay: c?.rentDueDay ?? null,
+      nextDueDate,
+      unpaidCount: unpaid?._count ?? 0,
+      unpaidAmount: unpaid ? Number(unpaid._sum.amount ?? 0) - Number(unpaid._sum.paidAmount ?? 0) : 0,
+      prepaidEnabled: u.prepaidEnabled,
+      prepaidBalance: prepaid?.balance ?? null,
+      prepaidDaysLeft: prepaid?.daysLeft ?? null,
+      prepaidDepletionDate: prepaid?.depletionDate ?? null,
+      prepaidLow: prepaid?.low ?? false,
+    });
+  }
+  const roomOf = new Map(rooms.map((r) => [r.unitId, r]));
+
+  type Entry = {
+    id: string; unitId: string; propertyName: string; unitNumber: string;
+    kind: 'RENT' | 'ELEC_TOPUP' | 'ELEC_USAGE' | 'ELEC_ADJUST' | 'ELEC_BILL';
+    date: Date; title: string; amount: number; paidAmount?: number;
+    kwh?: number | null; balanceAfter?: number; status?: string; note?: string | null;
+    // 編輯用的原始欄位
+    year?: number; month?: number; dueDate?: Date; paidDate?: Date | null; paymentMethod?: string | null; notes?: string | null;
+  };
+  const entries: Entry[] = [];
+
+  const rents = await prisma.rentRecord.findMany({
+    where: { contract: { unitId: { in: unitIds } }, dueDate: { gte: from, lt: to } },
+    include: { contract: { include: { tenant: true } } },
+  });
+  for (const r of rents) {
+    const room = roomOf.get(r.contract.unitId)!;
+    entries.push({
+      id: r.id, unitId: room.unitId, propertyName: room.propertyName, unitNumber: room.unitNumber,
+      kind: 'RENT', date: r.paidDate ?? r.dueDate,
+      title: `${r.year}/${r.month} 房租・${r.contract.tenant.name}`,
+      amount: Number(r.amount), paidAmount: Number(r.paidAmount ?? 0),
+      status: r.status, note: [r.paymentMethod, r.notes].filter(Boolean).join('・') || null,
+      year: r.year, month: r.month, dueDate: r.dueDate, paidDate: r.paidDate, paymentMethod: r.paymentMethod, notes: r.notes,
+    });
+  }
+
+  const prepaids = await prisma.prepaidRecord.findMany({
+    where: { unitId: { in: unitIds }, createdAt: { gte: from, lt: to } },
+  });
+  const kindMap = { TOPUP: 'ELEC_TOPUP', USAGE: 'ELEC_USAGE', ADJUST: 'ELEC_ADJUST' } as const;
+  const titleMap = { TOPUP: '電費儲值', USAGE: '用電扣款', ADJUST: '電費餘額調整' } as const;
+  for (const p of prepaids) {
+    const room = roomOf.get(p.unitId)!;
+    entries.push({
+      id: p.id, unitId: room.unitId, propertyName: room.propertyName, unitNumber: room.unitNumber,
+      kind: kindMap[p.type], date: p.createdAt, title: titleMap[p.type],
+      amount: Number(p.amount), kwh: p.kwh == null ? null : Number(p.kwh),
+      balanceAfter: Number(p.balanceAfter), note: p.note,
+    });
+  }
+
+  const allocations = await prisma.utilityAllocation.findMany({
+    where: { unitId: { in: unitIds }, utilityBill: { category: 'ELECTRICITY', periodEnd: { gte: from, lt: to } } },
+    include: { utilityBill: true },
+  });
+  for (const a of allocations) {
+    const room = roomOf.get(a.unitId)!;
+    const b = a.utilityBill;
+    entries.push({
+      id: a.id, unitId: room.unitId, propertyName: room.propertyName, unitNumber: room.unitNumber,
+      kind: 'ELEC_BILL', date: b.periodEnd,
+      title: `電費分攤 ${fmt(taipeiYMD(b.periodStart))}～${fmt(taipeiYMD(b.periodEnd))}`,
+      amount: Number(a.amount), status: a.billed ? 'BILLED' : 'UNBILLED', note: b.note,
+    });
+  }
+
+  entries.sort((x, y) => y.date.getTime() - x.date.getTime());
+  res.json({ year, month: month ?? null, rooms, entries });
 }

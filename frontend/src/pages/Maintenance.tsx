@@ -3,6 +3,7 @@ import { X, Plus, Sparkles, Scale } from 'lucide-react';
 import api from '../api/client';
 import { MaintenanceRequest, Property } from '../types';
 import HowTo from '../components/HowTo';
+import SearchBox, { matches } from '../components/SearchBox';
 
 type StatusFilter = 'ALL' | 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
 
@@ -30,6 +31,7 @@ export default function Maintenance() {
   const [showAdd, setShowAdd] = useState(false);
   const [editItem, setEditItem] = useState<MaintenanceRequest | null>(null);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
   const [analyses, setAnalyses] = useState<Record<string, Analysis>>({});
   const [analyzing, setAnalyzing] = useState<string | null>(null);
 
@@ -73,6 +75,15 @@ export default function Maintenance() {
     fetchAll();
   }
 
+  async function removeRequest(r: MaintenanceRequest) {
+    if (!confirm(`確定刪除「${r.unit?.unitNumber ?? ''} ${r.title}」這筆報修？`)) return;
+    await api.delete(`/maintenance/${r.id}`);
+    fetchAll();
+  }
+
+  const shown = requests.filter((r) =>
+    matches(search, r.title, r.description, r.notes, r.unit?.unitNumber, r.unit?.property?.name, r.tenant?.name));
+
   const allUnits = properties.flatMap(p => p.units.map(u => ({ ...u, propertyName: p.name })));
 
   return (
@@ -98,15 +109,19 @@ export default function Maintenance() {
         ))}
       </div>
 
+      <div className="mb-4 flex">
+        <SearchBox value={search} onChange={setSearch} placeholder="搜尋房號、標題、描述、租客" className="max-w-none" />
+      </div>
+
       {loading ? (
         <div className="text-center py-8 text-gray-400">載入中...</div>
-      ) : requests.length === 0 ? (
+      ) : shown.length === 0 ? (
         <div className="card text-center py-8 text-gray-400 text-sm">
-          {filter === 'ALL' ? '尚無報修紀錄' : `無${filter === 'PENDING' ? '待處理' : filter === 'IN_PROGRESS' ? '處理中' : '已完成'}報修`}
+          {search ? `找不到「${search}」的報修` : filter === 'ALL' ? '尚無報修紀錄' : `無${filter === 'PENDING' ? '待處理' : filter === 'IN_PROGRESS' ? '處理中' : '已完成'}報修`}
         </div>
       ) : (
         <div className="space-y-3">
-          {requests.map((r) => (
+          {shown.map((r) => (
             <div key={r.id} className="card">
               <div className="flex items-start justify-between mb-2">
                 <div>
@@ -148,17 +163,16 @@ export default function Maintenance() {
                 </div>
               )}
 
-              {r.status !== 'COMPLETED' && r.status !== 'CANCELLED' && (
-                <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100">
+              <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100">
                   {r.status === 'PENDING' && (
                     <button onClick={() => updateStatus(r.id, 'IN_PROGRESS')} className="btn-secondary text-xs flex-1">開始處理</button>
                   )}
                   {r.status === 'IN_PROGRESS' && (
                     <button onClick={() => updateStatus(r.id, 'COMPLETED')} className="btn-primary text-xs flex-1">標記完成</button>
                   )}
-                  <button onClick={() => setEditItem(r)} className="text-xs text-gray-400 hover:text-gray-600 px-2">編輯</button>
+                  <button onClick={() => setEditItem(r)} className="text-xs text-gray-400 hover:text-gray-600 px-2 ml-auto">編輯</button>
+                  <button onClick={() => removeRequest(r)} className="text-xs text-red-400 hover:text-red-600 px-2">刪除</button>
                 </div>
-              )}
             </div>
           ))}
         </div>

@@ -97,10 +97,21 @@ export async function updateContract(req: AuthRequest, res: Response) {
   if (!contract || contract.unit.property.userId !== req.userId!) {
     res.status(404).json({ error: '找不到合約' }); return;
   }
-  const { endDate, status, notes, depositPaid } = req.body;
+  const { startDate, endDate, status, notes, depositPaid, monthlyRent, depositAmount, rentDueDay } = req.body;
+  const dueDay = rentDueDay !== undefined && rentDueDay !== '' ? Number(rentDueDay) : undefined;
+  if (dueDay !== undefined && (!Number.isInteger(dueDay) || dueDay < 1 || dueDay > 31)) {
+    res.status(400).json({ error: '每月繳租日需為 1～31' }); return;
+  }
   const updated = await prisma.contract.update({
     where: { id },
-    data: { endDate: endDate ? new Date(endDate) : undefined, status, notes, depositPaid },
+    data: {
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+      status, notes, depositPaid,
+      monthlyRent: monthlyRent !== undefined && monthlyRent !== '' ? Number(monthlyRent) : undefined,
+      depositAmount: depositAmount !== undefined && depositAmount !== '' ? Number(depositAmount) : undefined,
+      rentDueDay: dueDay,
+    },
   });
   if (status === 'TERMINATED' || status === 'EXPIRED') {
     await prisma.unit.update({ where: { id: contract.unitId }, data: { status: 'VACANT' } });

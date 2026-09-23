@@ -3,6 +3,7 @@ import { Plus, Droplets, Zap, Flame, Building2, Split, Send, X } from 'lucide-re
 import api from '../api/client';
 import { Expense, Property } from '../types';
 import HowTo from '../components/HowTo';
+import SearchBox, { matches } from '../components/SearchBox';
 
 interface Allocation { unitId: string; unitNumber: string; amount: number; basis: number | null }
 interface UtilityBill {
@@ -12,6 +13,7 @@ interface UtilityBill {
   periodEnd: string;
   totalAmount: number;
   method: string;
+  note?: string | null;
   property?: { name: string };
   allocations: Array<{ id: string; amount: number; basis: number | null; billed: boolean; unit: { unitNumber: string } }>;
 }
@@ -35,6 +37,10 @@ export default function UtilityBills() {
   const [showSplit, setShowSplit] = useState(false);
   const [bills, setBills] = useState<UtilityBill[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [editingBill, setEditingBill] = useState<UtilityBill | null>(null);
+  const [category, setCategory] = useState('ALL');
+  const [search, setSearch] = useState('');
 
   useEffect(() => { fetchData(); }, [year, month]);
 
@@ -57,11 +63,24 @@ export default function UtilityBills() {
     fetchData();
   }
 
+  async function deleteBill(b: UtilityBill) {
+    if (!confirm(`確定刪除這張${UTILITY_LABELS[b.category]}分攤帳單（含各房分攤明細）？`)) return;
+    await api.delete(`/utility-bills/${b.id}`);
+    fetchData();
+  }
+
   async function deleteExpense(id: string) {
     if (!confirm('確定刪除此帳單？')) return;
     await api.delete(`/expenses/${id}`);
     fetchData();
   }
+
+  const shownExpenses = expenses.filter((e) =>
+    (category === 'ALL' || e.category === category)
+    && matches(search, e.description, e.property?.name, e.unit?.unitNumber, UTILITY_LABELS[e.category], e.amount));
+  const shownBills = bills.filter((b) =>
+    (category === 'ALL' || b.category === category)
+    && matches(search, b.property?.name, b.note, UTILITY_LABELS[b.category], ...b.allocations.map((a) => a.unit.unitNumber)));
 
   const totalByCategory: Record<string, number> = {};
   for (const e of expenses) {
@@ -111,17 +130,32 @@ export default function UtilityBills() {
         ))}
       </div>
 
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <div className="flex gap-1 bg-white rounded-xl p-1 border border-gray-100">
+          {['ALL', 'ELECTRICITY', 'WATER', 'GAS'].map((k) => (
+            <button
+              key={k}
+              onClick={() => setCategory(k)}
+              className={`px-3 py-1 rounded-lg text-xs font-medium ${category === k ? 'bg-brand text-white' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              {k === 'ALL' ? '全部' : UTILITY_LABELS[k]}
+            </button>
+          ))}
+        </div>
+        <SearchBox value={search} onChange={setSearch} placeholder="搜尋說明、物業、房號" />
+      </div>
+
       {loading ? (
         <div className="text-center py-12 text-gray-400">載入中...</div>
-      ) : expenses.length === 0 ? (
+      ) : shownExpenses.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-100 text-center py-12">
-          <div className="text-gray-400 text-sm mb-3">本月無水電帳單</div>
+          <div className="text-gray-400 text-sm mb-3">{expenses.length > 0 ? '沒有符合篩選條件的帳單' : '本月無水電帳單'}</div>
           <button onClick={() => setShowAdd(true)} className="btn-primary text-sm flex items-center gap-1 mx-auto">
             <Plus className="w-4 h-4" />新增帳單
           </button>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gray-100 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 text-xs text-gray-400">
@@ -134,7 +168,7 @@ export default function UtilityBills() {
               </tr>
             </thead>
             <tbody>
-              {expenses.map((e) => (
+              {shownExpenses.map((e) => (
                 <tr key={e.id} className="border-b border-gray-50 hover:bg-warm/50">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
@@ -153,7 +187,8 @@ export default function UtilityBills() {
                   <td className="px-4 py-3 text-gray-500">{e.description || '—'}</td>
                   <td className="px-4 py-3 text-gray-500">{new Date(e.date).toLocaleDateString('zh-TW')}</td>
                   <td className="px-4 py-3 text-right font-semibold text-gray-700">NT${Number(e.amount).toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <button onClick={() => setEditingExpense(e)} className="text-xs text-gray-500 hover:text-gray-700 mr-3">編輯</button>
                     <button onClick={() => deleteExpense(e.id)} className="text-xs text-red-400 hover:text-red-600">刪除</button>
                   </td>
                 </tr>
@@ -164,13 +199,13 @@ export default function UtilityBills() {
       )}
 
       {/* 分攤帳單 */}
-      {bills.length > 0 && (
+      {shownBills.length > 0 && (
         <div className="mt-6">
           <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">
             <Split className="w-4 h-4 text-brand" />分攤帳單
           </h2>
           <div className="space-y-3">
-            {bills.map((b) => (
+            {shownBills.map((b) => (
               <div key={b.id} className="bg-white rounded-2xl border border-gray-100 p-4">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2 text-sm">
@@ -179,10 +214,15 @@ export default function UtilityBills() {
                     <span className="text-xs text-gray-400">{b.property?.name}</span>
                     <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{METHOD_LABEL[b.method]}分攤</span>
                   </div>
-                  <span className="font-bold text-gray-800">NT${Number(b.totalAmount).toLocaleString()}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-gray-800">NT${Number(b.totalAmount).toLocaleString()}</span>
+                    <button onClick={() => setEditingBill(b)} className="text-xs text-gray-500 hover:text-gray-700">編輯</button>
+                    <button onClick={() => deleteBill(b)} className="text-xs text-red-400 hover:text-red-600">刪除</button>
+                  </div>
                 </div>
                 <div className="text-xs text-gray-400 mb-2">
                   {new Date(b.periodStart).toLocaleDateString('zh-TW')} ~ {new Date(b.periodEnd).toLocaleDateString('zh-TW')}
+                  {b.note && <span className="ml-2">・{b.note}</span>}
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-2">
                   {b.allocations.map((a) => (
@@ -205,12 +245,21 @@ export default function UtilityBills() {
         </div>
       )}
 
-      {showAdd && (
+      {editingBill && (
+        <EditBillModal
+          bill={editingBill}
+          onClose={() => setEditingBill(null)}
+          onSaved={() => { setEditingBill(null); fetchData(); }}
+        />
+      )}
+
+      {(showAdd || editingExpense) && (
         <AddUtilityModal
+          expense={editingExpense ?? undefined}
           properties={properties}
           allUnits={allUnits}
-          onClose={() => setShowAdd(false)}
-          onSaved={() => { setShowAdd(false); fetchData(); }}
+          onClose={() => { setShowAdd(false); setEditingExpense(null); }}
+          onSaved={() => { setShowAdd(false); setEditingExpense(null); fetchData(); }}
         />
       )}
 
@@ -373,7 +422,8 @@ function SplitModal({ properties, onClose, onSaved }: {
   );
 }
 
-function AddUtilityModal({ properties, allUnits, onClose, onSaved }: {
+function AddUtilityModal({ expense, properties, allUnits, onClose, onSaved }: {
+  expense?: Expense;
   properties: Property[];
   allUnits: Array<{ id: string; unitNumber: string; propertyName: string; propertyId: string }>;
   onClose: () => void;
@@ -381,33 +431,35 @@ function AddUtilityModal({ properties, allUnits, onClose, onSaved }: {
 }) {
   const now = new Date();
   const [form, setForm] = useState({
-    category: 'ELECTRICITY',
-    amount: '',
-    date: now.toISOString().split('T')[0],
-    description: '',
-    propertyId: properties[0]?.id ?? '',
-    unitId: '',
+    category: (expense?.category ?? 'ELECTRICITY') as string,
+    amount: expense ? String(expense.amount) : '',
+    date: expense ? String(expense.date).split('T')[0] : now.toISOString().split('T')[0],
+    description: expense?.description ?? '',
+    propertyId: expense ? expense.propertyId ?? '' : properties[0]?.id ?? '',
+    unitId: expense?.unitId ?? '',
   });
 
   const unitsForProperty = allUnits.filter((u) => u.propertyId === form.propertyId);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    await api.post('/expenses', {
+    const body = {
       category: form.category,
       amount: form.amount,
       date: form.date,
       description: form.description,
-      propertyId: form.propertyId || undefined,
-      unitId: form.unitId || undefined,
-    });
+      propertyId: form.propertyId || (expense ? '' : undefined),
+      unitId: form.unitId || (expense ? '' : undefined),
+    };
+    if (expense) await api.put(`/expenses/${expense.id}`, body);
+    else await api.post('/expenses', body);
     onSaved();
   }
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
-        <h3 className="font-bold text-lg mb-4">新增水電帳單</h3>
+        <h3 className="font-bold text-lg mb-4">{expense ? '編輯水電帳單' : '新增水電帳單'}</h3>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">類別</label>
@@ -423,8 +475,9 @@ function AddUtilityModal({ properties, allUnits, onClose, onSaved }: {
               value={form.propertyId}
               onChange={(e) => setForm({ ...form, propertyId: e.target.value, unitId: '' })}
               className="input"
+              required
             >
-              <option value="">不指定</option>
+              {properties.length === 0 && <option value="">請先建立物業</option>}
               {properties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
@@ -451,9 +504,73 @@ function AddUtilityModal({ properties, allUnits, onClose, onSaved }: {
           </div>
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose} className="btn-secondary flex-1">取消</button>
-            <button type="submit" className="btn-primary flex-1">新增</button>
+            <button type="submit" className="btn-primary flex-1">{expense ? '儲存' : '新增'}</button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function EditBillModal({ bill, onClose, onSaved }: { bill: UtilityBill; onClose: () => void; onSaved: () => void }) {
+  const day = (v: string) => String(v).split('T')[0];
+  const [periodStart, setPeriodStart] = useState(day(bill.periodStart));
+  const [periodEnd, setPeriodEnd] = useState(day(bill.periodEnd));
+  const [note, setNote] = useState(bill.note ?? '');
+  const [amounts, setAmounts] = useState<Record<string, string>>(
+    Object.fromEntries(bill.allocations.map((a) => [a.id, String(a.amount)])),
+  );
+  const [saving, setSaving] = useState(false);
+  const total = Object.values(amounts).reduce((s, v) => s + (Number(v) || 0), 0);
+
+  async function submit() {
+    setSaving(true);
+    await api.put(`/utility-bills/${bill.id}`, {
+      periodStart, periodEnd, note,
+      allocations: Object.entries(amounts).map(([id, amount]) => ({ id, amount: Number(amount) || 0 })),
+    });
+    setSaving(false);
+    onSaved();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl p-5 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
+        <h3 className="font-bold text-lg mb-4">編輯{UTILITY_LABELS[bill.category]}分攤帳單</h3>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block text-xs text-gray-500">計費期起
+              <input type="date" className="input mt-1" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
+            </label>
+            <label className="block text-xs text-gray-500">計費期迄
+              <input type="date" className="input mt-1" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+            </label>
+          </div>
+          <div>
+            <div className="text-xs text-gray-500 mb-1">各房分攤金額</div>
+            <div className="grid grid-cols-2 gap-2">
+              {bill.allocations.map((a) => (
+                <label key={a.id} className="flex items-center gap-2 bg-warm rounded-lg px-2.5 py-1.5 text-xs">
+                  <span className="text-gray-600 w-12 shrink-0">{a.unit.unitNumber}</span>
+                  <input
+                    type="number"
+                    className="input py-1 text-xs"
+                    value={amounts[a.id]}
+                    onChange={(e) => setAmounts({ ...amounts, [a.id]: e.target.value })}
+                  />
+                </label>
+              ))}
+            </div>
+            <div className="text-xs text-gray-500 mt-2">總額：NT${total.toLocaleString()}（依各房加總）</div>
+          </div>
+          <label className="block text-xs text-gray-500">備註
+            <input className="input mt-1" value={note} onChange={(e) => setNote(e.target.value)} />
+          </label>
+        </div>
+        <div className="flex gap-2 pt-4">
+          <button type="button" onClick={onClose} className="btn-secondary flex-1">取消</button>
+          <button onClick={submit} disabled={saving} className="btn-primary flex-1 disabled:opacity-50">{saving ? '儲存中…' : '儲存'}</button>
+        </div>
       </div>
     </div>
   );

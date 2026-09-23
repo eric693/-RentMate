@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { canRoute, firstAllowedRoute } from './lib/permissions';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -23,11 +24,27 @@ import ROIAnalysis from './pages/ROIAnalysis';
 import RentComps from './pages/RentComps';
 import RentBell from './pages/RentBell';
 import RentStats from './pages/RentStats';
+import DormRecords from './pages/DormRecords';
+import Accounts from './pages/Accounts';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="flex items-center justify-center h-screen text-gray-400">載入中...</div>;
   return user ? <>{children}</> : <Navigate to="/login" replace />;
+}
+
+/** 員工進到沒有權限的頁面：首頁導到第一個可用頁，其他顯示無權限 */
+function PermissionGate({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const { pathname } = useLocation();
+  if (canRoute(user, pathname)) return <>{children}</>;
+  if (pathname === '/') return <Navigate to={firstAllowedRoute(user)} replace />;
+  return (
+    <div className="flex flex-col items-center justify-center py-24 text-center px-6">
+      <div className="text-gray-700 font-semibold mb-1">您沒有使用此功能的權限</div>
+      <div className="text-sm text-gray-400">如需開通，請聯絡管理員到「帳號權限」設定。</div>
+    </div>
+  );
 }
 
 export default function App() {
@@ -46,25 +63,27 @@ export default function App() {
               </PrivateRoute>
             }
           >
-            <Route index element={<Dashboard />} />
-            <Route path="properties" element={<Properties />} />
-            <Route path="tenants" element={<Tenants />} />
-            <Route path="finance" element={<Finance />} />
-            <Route path="finance/workbench" element={<CollectionWorkbench />} />
-            <Route path="finance/rent" element={<RentManagement />} />
-            <Route path="finance/bell" element={<RentBell />} />
-            <Route path="finance/stats" element={<RentStats />} />
-            <Route path="finance/utilities" element={<UtilityBills />} />
-            <Route path="finance/prepaid" element={<PrepaidMeter />} />
-            <Route path="finance/reconcile" element={<Reconciliation />} />
-            <Route path="finance/expenses" element={<ExpenseRecords />} />
-            <Route path="finance/tax" element={<TaxReport />} />
-            <Route path="contracts" element={<Contracts />} />
-            <Route path="listings" element={<Listings />} />
-            <Route path="roi" element={<ROIAnalysis />} />
-            <Route path="market" element={<RentComps />} />
-            <Route path="maintenance" element={<Maintenance />} />
-            <Route path="settings" element={<Settings />} />
+            <Route index element={<PermissionGate><Dashboard /></PermissionGate>} />
+            <Route path="properties" element={<PermissionGate><Properties /></PermissionGate>} />
+            <Route path="tenants" element={<PermissionGate><Tenants /></PermissionGate>} />
+            <Route path="finance" element={<PermissionGate><Finance /></PermissionGate>} />
+            <Route path="finance/workbench" element={<PermissionGate><CollectionWorkbench /></PermissionGate>} />
+            <Route path="finance/rent" element={<PermissionGate><RentManagement /></PermissionGate>} />
+            <Route path="finance/bell" element={<PermissionGate><RentBell /></PermissionGate>} />
+            <Route path="finance/stats" element={<PermissionGate><RentStats /></PermissionGate>} />
+            <Route path="finance/records" element={<PermissionGate><DormRecords /></PermissionGate>} />
+            <Route path="finance/utilities" element={<PermissionGate><UtilityBills /></PermissionGate>} />
+            <Route path="finance/prepaid" element={<PermissionGate><PrepaidMeter /></PermissionGate>} />
+            <Route path="finance/reconcile" element={<PermissionGate><Reconciliation /></PermissionGate>} />
+            <Route path="finance/expenses" element={<PermissionGate><ExpenseRecords /></PermissionGate>} />
+            <Route path="finance/tax" element={<PermissionGate><TaxReport /></PermissionGate>} />
+            <Route path="contracts" element={<PermissionGate><Contracts /></PermissionGate>} />
+            <Route path="listings" element={<PermissionGate><Listings /></PermissionGate>} />
+            <Route path="roi" element={<PermissionGate><ROIAnalysis /></PermissionGate>} />
+            <Route path="market" element={<PermissionGate><RentComps /></PermissionGate>} />
+            <Route path="maintenance" element={<PermissionGate><Maintenance /></PermissionGate>} />
+            <Route path="settings" element={<PermissionGate><Settings /></PermissionGate>} />
+            <Route path="accounts" element={<Accounts />} />
           </Route>
         </Routes>
       </BrowserRouter>
