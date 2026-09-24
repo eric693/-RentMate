@@ -262,138 +262,40 @@ export default function Settings() {
   );
 }
 
-function TeamMembersTab({ user, tenantCount }: { user: any; tenantCount: number }) {
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState('管理員');
-  const [members] = useState([
-    { id: '1', name: user?.name ?? '擁有者', email: user?.email ?? '', role: '擁有者', isOwner: true, isYou: true },
-  ]);
-
-  function handleInvite(e: React.FormEvent) {
-    e.preventDefault();
-    alert(`邀請功能需要後端支援。\n已填寫：${inviteEmail} (${inviteRole})`);
-    setInviteEmail('');
-  }
-
+function TeamMembersTab({ user }: { user: any; tenantCount: number }) {
+  const admin = user?.role !== 'STAFF';
   return (
     <div className="space-y-4">
-      {/* Current workspace */}
       <div className="card">
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs text-gray-400 flex items-center gap-1.5">
-            <Shield className="w-3.5 h-3.5" />目前工作區
+            <Shield className="w-3.5 h-3.5" />目前登入
           </span>
-          <span className="text-xs bg-brand/10 text-brand px-2 py-0.5 rounded-full font-medium">擁有者</span>
+          <span className="text-xs bg-brand/10 text-brand px-2 py-0.5 rounded-full font-medium">{admin ? '管理員' : '員工'}</span>
         </div>
-        <div className="font-semibold text-gray-800 mb-2">{user?.name}</div>
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-brand rounded-full flex items-center justify-center">
-            <span className="text-white text-xs font-bold">{user?.name?.charAt(0)}</span>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 bg-brand rounded-full flex items-center justify-center">
+            <span className="text-white text-sm font-bold">{user?.name?.charAt(0)}</span>
           </div>
-          <span className="text-xs text-gray-400">擁有者登入中</span>
-        </div>
-      </div>
-
-      {/* Team status */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Shield className="w-4 h-4 text-brand" />
-            <span className="font-semibold text-gray-700">團隊狀態</span>
-          </div>
-          <span className="text-xs bg-brand/10 text-brand px-2 py-0.5 rounded-full">可管理</span>
-        </div>
-        <p className="text-xs text-gray-400 mb-4">成員、邀請與權限一眼確認</p>
-        <div className="grid grid-cols-4 divide-x divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
-          {[
-            { label: '成員', value: members.length },
-            { label: '邀請', value: 0 },
-            { label: '角色', value: '擁有者' },
-            { label: '權限', value: '管理' },
-          ].map((item) => (
-            <div key={item.label} className="text-center py-3 px-2">
-              <div className="text-xs text-gray-400 mb-1">{item.label}</div>
-              <div className="font-bold text-gray-800 text-sm">{item.value}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Invite member */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
           <div>
-            <div className="flex items-center gap-2 mb-0.5">
-              <UserPlus className="w-4 h-4 text-gray-600" />
-              <span className="font-semibold text-gray-700">邀請成員</span>
-            </div>
-            <p className="text-xs text-gray-400">建立邀請後，對方接受才會加入。</p>
+            <div className="font-semibold text-gray-800">{user?.name}</div>
+            <div className="text-xs text-gray-400">登入帳號：{user?.email}</div>
           </div>
-          <button className="flex items-center gap-1 text-xs text-gray-400 hover:text-brand transition-colors">
-            <RefreshCw className="w-3.5 h-3.5" />同步
-          </button>
         </div>
-        <form onSubmit={handleInvite} className="space-y-3">
-          <input
-            type="email"
-            placeholder="成員 Email"
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
-            className="input text-sm"
-            required
-          />
-          <div className="flex gap-2">
-            <select
-              value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value)}
-              className="input text-sm flex-1"
-            >
-              <option value="管理員">管理員</option>
-              <option value="財務">財務</option>
-              <option value="維修人員">維修人員</option>
-            </select>
-            <p className="text-xs text-gray-400 self-center whitespace-nowrap">
-              {inviteRole === '管理員' ? '房源、租客、租金、報修與 LINE 基本管理。' : inviteRole === '財務' ? '帳務相關功能。' : '報修管理。'}
-            </p>
-          </div>
-          <button type="submit" className="btn-primary text-sm w-full flex items-center justify-center gap-2">
-            <UserPlus className="w-4 h-4" />邀請
-          </button>
-        </form>
       </div>
 
-      {/* Member list */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <div className="flex items-center gap-2 mb-0.5">
-              <Users className="w-4 h-4 text-gray-600" />
-              <span className="font-semibold text-gray-700">成員清單</span>
-            </div>
-            <p className="text-xs text-gray-400">{members.length} 位成員可進入此工作台。</p>
+      <Link to="/accounts" className="card flex items-center justify-between hover:bg-warm transition-colors">
+        <div>
+          <div className="flex items-center gap-2 mb-0.5">
+            <Users className="w-4 h-4 text-brand" />
+            <span className="font-semibold text-gray-700">{admin ? '帳號權限與團隊成員' : '我的帳號'}</span>
           </div>
+          <p className="text-xs text-gray-400">
+            {admin ? '修改您的名稱、登入帳號（Email）與密碼；新增員工帳號並設定權限' : '修改您的名稱、登入帳號與密碼'}
+          </p>
         </div>
-        <div className="space-y-2">
-          {members.map((m) => (
-            <div key={m.id} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:bg-warm transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-brand rounded-full flex items-center justify-center flex-shrink-0">
-                  <span className="text-white text-xs font-bold">{m.name.charAt(0)}</span>
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-800">{m.name}</span>
-                    {m.isOwner && <span className="text-xs bg-brand/10 text-brand px-1.5 py-0.5 rounded-full">擁有者</span>}
-                    {m.isYou && <span className="text-xs text-gray-400">你</span>}
-                  </div>
-                  <div className="text-xs text-gray-400 mt-0.5">{m.email}</div>
-                </div>
-              </div>
-              <ChevronRight className="w-4 h-4 text-gray-300" />
-            </div>
-          ))}
-        </div>
-      </div>
+        <ChevronRight className="w-4 h-4 text-gray-300" />
+      </Link>
     </div>
   );
 }

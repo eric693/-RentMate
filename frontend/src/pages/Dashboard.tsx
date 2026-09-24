@@ -9,6 +9,8 @@ import api from '../api/client';
 import { DashboardData } from '../types';
 import CalendarModal from '../components/CalendarModal';
 import HowTo from '../components/HowTo';
+import { useAuth } from '../context/AuthContext';
+import { isAdmin } from '../lib/permissions';
 
 export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -16,6 +18,7 @@ export default function Dashboard() {
   const [showCalendar, setShowCalendar] = useState(false);
   const [trendPeriod, setTrendPeriod] = useState<'6m' | '12m'>('6m');
   const navigate = useNavigate();
+  const { user } = useAuth();
   const now = new Date();
 
   useEffect(() => {
@@ -40,8 +43,17 @@ export default function Dashboard() {
             {now.getFullYear()} 年 {now.getMonth() + 1} 月
           </button>
           <div className="flex items-center gap-1">
-            <div className="w-7 h-7 bg-brand rounded-full flex items-center justify-center text-white text-xs font-bold">震</div>
-            <span className="text-sm text-gray-600 hidden lg:block">擁有者</span>
+            <button
+              onClick={() => navigate('/accounts')}
+              className="flex items-center gap-1.5"
+              title="我的帳號"
+              aria-label="我的帳號"
+            >
+              <div className="w-7 h-7 bg-brand rounded-full flex items-center justify-center text-white text-xs font-bold">
+                {user?.name?.charAt(0) ?? '?'}
+              </div>
+              <span className="text-sm text-gray-600 hidden lg:block">{user?.name}（{isAdmin(user) ? '管理員' : '員工'}）</span>
+            </button>
           </div>
         </div>
       </div>
