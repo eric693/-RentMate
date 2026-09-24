@@ -15,7 +15,31 @@ function sign(userId: string) {
   return jwt.sign({ userId }, process.env.JWT_SECRET!, { expiresIn: '30d' });
 }
 
+// 登入失敗次數限制：同一 IP＋帳號 15 分鐘內錯 8 次就暫時鎖住，擋暴力猜密碼。
+// 存在記憶體即可（重啟歸零無妨），不需要資料表。
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_FAILS = 8;
+const loginFails = new Map<string, { count: number; first: number }>();
+
+function tooManyFails(key: string) {
+  const f = loginFails.get(key);
+  if (!f) return false;
+  if (Date.now() - f.first > LOGIN_WINDOW_MS) { loginFails.delete(key); return false; }
+  return f.count >= LOGIN_MAX_FAILS;
+}
+
+function recordFail(key: string) {
+  const f = loginFails.get(key);
+  if (!f || Date.now() - f.first > LOGIN_WINDOW_MS) loginFails.set(key, { count: 1, first: Date.now() });
+  else f.count += 1;
+}
+
 export async function register(req: Request, res: Response) {
+  // 正式環境預設不開放自行註冊；需要時在 .env 設 ALLOW_REGISTER=true
+  if (process.env.ALLOW_REGISTER !== 'true') {
+    res.status(403).json({ error: '目前不開放自行註冊，請聯絡管理員建立帳號' });
+    return;
+  }
   const { password, name } = req.body;
   const email = normalizeAccount(req.body.email);
   if (!email || !password || !name) {
@@ -35,11 +59,18 @@ export async function register(req: Request, res: Response) {
 export async function login(req: Request, res: Response) {
   const { password } = req.body;
   const account = normalizeAccount(req.body.email ?? req.body.account);
+  const failKey = `${req.ip}|${account}`;
+  if (tooManyFails(failKey)) {
+    res.status(429).json({ error: '密碼錯誤次數過多，請 15 分鐘後再試' });
+    return;
+  }
   const user = await prisma.user.findFirst({ where: { email: { equals: account, mode: 'insensitive' } } });
   if (!user || !(await bcrypt.compare(String(password ?? ''), user.password))) {
+    recordFail(failKey);
     res.status(401).json({ error: '帳號或密碼錯誤' });
     return;
   }
+  loginFails.delete(failKey);
   if (!user.active) {
     res.status(403).json({ error: '此帳號已停用，請聯絡管理員' });
     return;

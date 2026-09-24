@@ -20,6 +20,8 @@ exports.prisma = new client_2.PrismaClient();
 exports.UPLOAD_DIR = path_1.default.resolve(__dirname, '../uploads');
 fs_1.default.mkdirSync(path_1.default.join(exports.UPLOAD_DIR, 'maintenance'), { recursive: true });
 const app = (0, express_1.default)();
+// 在 nginx 後面，讓 req.ip 取到真實用戶 IP（登入次數限制用）
+app.set('trust proxy', 1);
 app.use((0, cors_1.default)({
     origin: process.env.FRONTEND_URL ?? 'http://localhost:5173',
     credentials: true,

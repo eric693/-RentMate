@@ -34,3 +34,6 @@ Thumbs.db
 
 # TypeScript
 *.tsbuildinfo
+.env.bak*
+backend/.env.bak*
+backups/

@@ -5,6 +5,7 @@
 // 用法：node scripts/smoke-test.mjs            （預設打 http://localhost:3001/api）
 //       API=https://example.com/api node scripts/smoke-test.mjs
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 import 'dotenv/config';
 
 const API = process.env.API ?? 'http://localhost:3001/api';
@@ -39,10 +40,15 @@ const ym = { year: today.getFullYear(), month: today.getMonth() + 1 };
 
 async function main() {
   // ── 帳號 ──
-  const reg = await call('POST', '/auth/register', { body: { email: `zz-smoke-${stamp}`, password: 'smoke12345', name: '煙霧測試' } });
+  // 正式環境關閉了公開註冊，臨時帳號直接寫進資料庫
+  await call('POST', '/auth/register', { body: { email: `zz-smoke-x-${stamp}`, password: 'smoke12345', name: 'x' }, expect: [403], label: '/auth/register (應關閉)' });
+  await prisma.user.create({ data: { email: `zz-smoke-${stamp}`, password: await bcrypt.hash('smoke12345', 10), name: '煙霧測試' } });
+  const reg = await call('POST', '/auth/login', { body: { email: `zz-smoke-${stamp}`, password: 'smoke12345' } });
   const T = reg.data.token;
   await call('POST', '/auth/login', { body: { email: `ZZ-SMOKE-${stamp}`, password: 'smoke12345' }, label: '/auth/login (大小寫不同)' });
   await call('POST', '/auth/login', { body: { email: `zz-smoke-${stamp}`, password: 'wrong' }, expect: [401], label: '/auth/login (錯誤密碼)' });
+  for (let i = 0; i < 8; i++) await call('POST', '/auth/login', { body: { email: `zz-smoke-lock-${stamp}`, password: 'x' }, expect: [401, 429], label: '/auth/login (連續錯誤)' });
+  await call('POST', '/auth/login', { body: { email: `zz-smoke-lock-${stamp}`, password: 'x' }, expect: [429], label: '/auth/login (錯太多次應鎖住)' });
   await call('GET', '/auth/me', { token: T });
   await call('PUT', '/auth/me', { token: T, body: { name: '煙霧測試2' } });
   await call('PUT', '/auth/me', { token: T, body: { newPassword: 'x1234567', currentPassword: 'bad' }, expect: [400], label: '/auth/me (目前密碼錯)' });

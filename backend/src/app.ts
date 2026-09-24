@@ -17,6 +17,8 @@ export const UPLOAD_DIR = path.resolve(__dirname, '../uploads');
 fs.mkdirSync(path.join(UPLOAD_DIR, 'maintenance'), { recursive: true });
 
 const app = express();
+// 在 nginx 後面，讓 req.ip 取到真實用戶 IP（登入次數限制用）
+app.set('trust proxy', 1);
 
 app.use(cors({
   origin: process.env.FRONTEND_URL ?? 'http://localhost:5173',

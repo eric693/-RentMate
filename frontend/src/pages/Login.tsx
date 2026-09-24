@@ -5,8 +5,8 @@ import { useAuth } from '../context/AuthContext';
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('landlord@example.com');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -66,9 +66,6 @@ export default function Login() {
               {loading ? '登入中...' : '登入'}
             </button>
           </form>
-          <p className="text-center text-xs text-gray-400 mt-4">
-            測試帳號：landlord@example.com / password123
-          </p>
         </div>
 
         <p className="text-center text-sm text-gray-400 mt-5">
